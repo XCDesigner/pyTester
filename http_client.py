@@ -26,24 +26,24 @@ class HttpClient:
             print(f"[{self.ip}] 发送失败：{str(e)}\n")
         print(log)
 
-    async def G28_test(self, gcode:str):
+    async def G28_test(self, index, gcode:str):
         print(f'{self.ip}: test g28')
         await asyncio.sleep(1)
         print(f'{self.ip}: test complete')
         if self.ip == '172.16.22.126':
-            return [True, 'ok']
+            return [index, True, 'ok']
         else:
-            return [False, 'ok']
+            return [index, False, 'ok']
         # self.send_gcode(gcode)
 
-    async def dummy_test(self, gcode:str):
+    async def dummy_test(self, index, gcode:str):
         print(f'{self.ip}: dummy_test')
         await asyncio.sleep(0.5)
         print(f'{self.ip}: test complete')
-        return [True, 'ok']
+        return [index, True, 'ok']
 
     async def test(self, test_items:Dict[str, Dict[str, str]], callback):
-        for test in test_items.values():
+        for i, test in enumerate(test_items.values()):
             gcode = test.get('gcode')
             if not gcode:
                 func = self.dummy_test
@@ -52,6 +52,6 @@ class HttpClient:
                 gcode_cmd = gcode.split(' ')[0]
                 if gcode_cmd in self.test_handle:
                     func = self.test_handle.get(gcode_cmd)
-            result = await func(gcode)
+            result = await func(i, gcode)
             callback(self.ip, result)
         return True

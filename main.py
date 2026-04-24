@@ -124,38 +124,37 @@ class DeviceTestApp:
         if not dev:
             return
         tree = dev['tree']
-        test_pass = result[0]    # True/False
-        test_value = result[1]  # 测试值
+        row_index = result[0]
+        test_pass = result[1]    # True/False
+        test_value = result[2]  # 测试值
         result_text = "PASS" if test_pass else "FAIL"
 
         # 👇 必须用 after 安全更新 UI（tkinter 跨线程唯一正确写法）
-        self.root.after(0, self._update_tree_item, tree, test_value, result_text)
+        self.root.after(0, self._update_tree_item, tree, row_index, test_value, result_text)
 
     # ========== 真正执行 Tree 表格更新的内部函数 ==========
-    def _update_tree_item(self, tree, test_value, result_text):
-        """
-        按顺序更新当前测试项：测试值、结果
-        （按你CSV加载顺序自动匹配）
-        """
-        # 获取所有行
+    def _update_tree_item(self, tree, row_index, test_value, result_text):
         children = tree.get_children()
-        if not children:
+        if row_index < 0 or row_index >= len(children):
             return
+        item_id = children[row_index]  # 用索引取 item_id
+        current_values = tree.item(item_id, "values")
 
-        # 找到第一个还没填结果的行，进行更新
-        for item_id in children:
-            current_val = tree.item(item_id, "values")[2]  # 测试值列
-            current_res = tree.item(item_id, "values")[3]  # 结果列
+        # 赋值：测试项、标准、测试值、结果
+        tree.item(item_id, values=(
+            current_values[0],
+            current_values[1],
+            test_value,
+            result_text
+        ))
 
-            if current_val == "" and current_res == "":
-                # 填充 测试值 + 结果
-                tree.item(item_id, values=(
-                    tree.item(item_id, "values")[0],  # 测试项名
-                    tree.item(item_id, "values")[1],  # 标准
-                    test_value,                       # 测试值
-                    result_text                       # 结果
-                ))
-                break
+        # 颜色高亮
+        if result_text == "PASS":
+            tree.tag_configure("pass", background="#90EE90")  # 浅绿
+            tree.item(item_id, tags=("pass",))
+        else:
+            tree.tag_configure("fail", background="#FFB6C1")  # 浅红
+            tree.item(item_id, tags=("fail",))
 
     # ========== 开始测试 ==========
     def start_test(self):
@@ -179,10 +178,10 @@ class DeviceTestApp:
 
         try:
             # 运行具体的协程
-            result = loop.run_until_complete(asyncio.gather(*tasks))
+            result = loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
         except Exception as e:
             ''''''
-            print(e)
+            print("run_async_loop 错误 =>", e)
         finally:
             loop.close()
 
