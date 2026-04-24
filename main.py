@@ -119,12 +119,43 @@ class DeviceTestApp:
         return checked
     
     # ========== 测试过程更新UI回调 ==========
-    def update_ui(self, ip, result):
+    def update_ui(self, ip, result:List):
         dev = self.devices.get(ip)
         if not dev:
             return
-        tree =dev['tree']
-        print(f'{ip}: {result}')
+        tree = dev['tree']
+        test_pass = result[0]    # True/False
+        test_value = result[1]  # 测试值
+        result_text = "PASS" if test_pass else "FAIL"
+
+        # 👇 必须用 after 安全更新 UI（tkinter 跨线程唯一正确写法）
+        self.root.after(0, self._update_tree_item, tree, test_value, result_text)
+
+    # ========== 真正执行 Tree 表格更新的内部函数 ==========
+    def _update_tree_item(self, tree, test_value, result_text):
+        """
+        按顺序更新当前测试项：测试值、结果
+        （按你CSV加载顺序自动匹配）
+        """
+        # 获取所有行
+        children = tree.get_children()
+        if not children:
+            return
+
+        # 找到第一个还没填结果的行，进行更新
+        for item_id in children:
+            current_val = tree.item(item_id, "values")[2]  # 测试值列
+            current_res = tree.item(item_id, "values")[3]  # 结果列
+
+            if current_val == "" and current_res == "":
+                # 填充 测试值 + 结果
+                tree.item(item_id, values=(
+                    tree.item(item_id, "values")[0],  # 测试项名
+                    tree.item(item_id, "values")[1],  # 标准
+                    test_value,                       # 测试值
+                    result_text                       # 结果
+                ))
+                break
 
     # ========== 开始测试 ==========
     def start_test(self):
@@ -230,7 +261,6 @@ class DeviceTestApp:
         }
         # 刷新设备列表显示
         self.refresh_device_list()
-        messagebox.showinfo("成功", f"设备 {ip} 已添加！")  # 新增：反馈提示
 
     def add_device(self):
         ip = self.ip_entry.get().strip()
