@@ -1,0 +1,25 @@
+序号,测试项,标准,gcode
+1,回home,None,G28
+2,传感器精度测试,xmax:0.120;ymax:0.060,
+3,机器回home,None,G28
+4,回home标定,None,
+5,回home测试,xmax:0.100;ymax:0.100,
+6,机器回home,None,G28
+7,X轴加速度共振测试,None,
+8,机器回home,None,G28
+9,Y轴加速度共振测试,None,
+10,机器模式切换,None,
+11,关闭风扇,None,
+12,机器回home,None,G28
+13,XY 整形器频率和波动测试,None,
+14,机器模式切换,None,
+15,机器回home,None,G28
+16,XY行程测试,xmin:610.5;xmax:613;ymin:305.5;ymax:307,
+17,机器回home,None,G28
+18,XY重复定位精度,xmax:0.03;ymax:0.03,
+19,机器回home,None,G28
+20,X轴加速度测试,,
+21,机器回home,None,G28
+22,Y轴加速测试,,
+23,机器回home,None,G28
+24,XY轴加速度混动测试,,
