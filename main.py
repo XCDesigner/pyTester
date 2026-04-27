@@ -118,7 +118,40 @@ class DeviceTestApp:
                 checked.append(ip)
         return checked
     
+    # ========== 测试开始前，清除显示 ==========
+    def reset_test_result(self):
+        for ip, dev in self.devices.items():
+            tree = dev['tree']
+            for item_id in tree.get_children():
+                vals = tree.item(item_id, "values")
+                # 保留：测试项、标准；清空：测试值、结果
+                new_vals = (vals[0], vals[1], "", "")
+                tree.item(item_id, values=new_vals)
+                # 移除背景标签，恢复原色
+                tree.item(item_id, tags=())
+    
     # ========== 测试过程更新UI回调 ==========
+    def test_complete_callback(self, ip, result:List):
+        dev = self.devices.get(ip)
+        if not dev:
+            return
+        self.update_ui(ip, result)
+        index = result[0]
+        test_pass = result[1]    # True/False/Manual
+        if test_pass == 'Manual':
+            res = messagebox.askyesno(f"{ip}", "请确认是否继续")
+            if res:
+                result[1] = True
+                self.update_ui(ip, result)
+                return True
+            else:
+                result[1] = False
+                self.update_ui(ip, result)
+                return False
+        else:
+            self.update_ui(ip, result)
+            return True
+
     def update_ui(self, ip, result:List):
         dev = self.devices.get(ip)
         if not dev:
@@ -161,11 +194,11 @@ class DeviceTestApp:
         if not self.test_template:
             messagebox.showwarning("提示", "请先选择CSV测试项文件！")
             return
-
         checked_ips = self.get_checked_ips()
         if not checked_ips:
             messagebox.showwarning("提示", "请先勾选要测试的设备！")
             return
+        self.reset_test_result()
         print(checked_ips)
         thread = threading.Thread(target=self.run_async_loop,args=(checked_ips,), daemon=True)
         thread.start()
@@ -174,7 +207,7 @@ class DeviceTestApp:
         # 在线程中设置并运行新的事件循环
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        tasks = [self.devices[ip].get('client').test(self.test_template, self.update_ui) for ip in ip_list]
+        tasks = [self.devices[ip].get('client').test(self.test_template, self.test_complete_callback) for ip in ip_list]
 
         try:
             # 运行具体的协程

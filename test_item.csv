@@ -1,25 +1,26 @@
 序号,测试项,标准,gcode
 1,回home,None,G28
-2,传感器精度测试,xmax:0.120;ymax:0.060,
+2,传感器精度测试,xmax:0.120;ymax:0.060,TEST_ENCODER
 3,机器回home,None,G28
-4,回home标定,None,
-5,回home测试,xmax:0.100;ymax:0.100,
+4,回home标定,None,AUTO_HOME_TUNE
+5,回home测试,xmax:0.100;ymax:0.100,TEST_HOME
 6,机器回home,None,G28
-7,X轴加速度共振测试,None,
+7,X轴加速度共振测试,None,TEST_XY_SPEED AXIS=X MAX_SPEED=400 MAX_ACCEL=4000
 8,机器回home,None,G28
-9,Y轴加速度共振测试,None,
-10,机器模式切换,None,
-11,关闭风扇,None,
+9,Y轴加速度共振测试,None,TEST_XY_SPEED AXIS=Y MAX_SPEED=400 MAX_ACCEL=4000
+10,机器模式切换,None,SYS_MODE MODE=dev
+11,关闭风扇,None,SET_OUTPUT_PIN PIN=
 12,机器回home,None,G28
-13,XY 整形器频率和波动测试,None,
-14,机器模式切换,None,
+13,XY 整形器频率和波动测试,None,"TEST_RESONANCES AXIS=X
+TEST_RESONANCES AXIS=Y"
+14,机器模式切换,None,SYS_MODE MODE=prod
 15,机器回home,None,G28
-16,XY行程测试,xmin:610.5;xmax:613;ymin:305.5;ymax:307,
+16,XY行程测试,xmin:610.5;xmax:613;ymin:305.5;ymax:307,TEST_XY_RANGE
 17,机器回home,None,G28
-18,XY重复定位精度,xmax:0.03;ymax:0.03,
+18,XY重复定位精度,xmax:0.03;ymax:0.03,ENCODER_TEST
 19,机器回home,None,G28
-20,X轴加速度测试,,
+20,X轴加速度测试,"max_acc:4000,max_v:600",TEST_XY_SPEED AXIS=X MAX_SPEED=1000 MAX_ACCEL=4000
 21,机器回home,None,G28
-22,Y轴加速测试,,
+22,Y轴加速测试,"max_acc:4000,max_v:600",TEST_XY_SPEED AXIS=Y MAX_SPEED=1000 MAX_ACCEL=4000
 23,机器回home,None,G28
-24,XY轴加速度混动测试,,
+24,XY轴加速度混动测试,"max_acc:3000,max_v:400",TEST_XY_SPEED_HYBRID
