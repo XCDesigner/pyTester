@@ -6,6 +6,8 @@ from tkinter import ttk, messagebox, filedialog
 from cvs_reader import CSVReader
 import threading
 from typing import Dict, Optional, List
+import os
+from datetime import datetime
 
 class DeviceTestApp:
     def __init__(self, root):
@@ -119,7 +121,20 @@ class DeviceTestApp:
         return checked
     
     # ========== 测试开始前，清除显示 ==========
-    def reset_test_result(self):
+    def reset_test_result(self, ips):
+        # 1. 生成外层日期目录
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        if not os.path.exists(date_str):
+            os.makedirs(date_str)
+            print(f"已创建日期根目录：{date_str}")
+
+        # 2. 在日期目录下，为每个勾选IP创建独立子文件夹
+        for ip in ips:
+            ip_dir = os.path.join(date_str, ip)
+            if not os.path.exists(ip_dir):
+                os.makedirs(ip_dir)
+                print(f"已创建设备目录：{ip_dir}")
+
         for ip, dev in self.devices.items():
             tree = dev['tree']
             for item_id in tree.get_children():
@@ -138,6 +153,7 @@ class DeviceTestApp:
         self.update_ui(ip, result)
         index = result[0]
         test_pass = result[1]    # True/False/Manual
+        report = dev['client'].get_ws_messages()
         if test_pass == 'Manual':
             res = messagebox.askyesno(f"{ip}", "请确认是否继续")
             if res:
@@ -198,7 +214,7 @@ class DeviceTestApp:
         if not checked_ips:
             messagebox.showwarning("提示", "请先勾选要测试的设备！")
             return
-        self.reset_test_result()
+        self.reset_test_result(checked_ips)
         print(checked_ips)
         thread = threading.Thread(target=self.run_async_loop,args=(checked_ips,), daemon=True)
         thread.start()
