@@ -8,6 +8,7 @@ import threading
 from typing import Dict, Optional, List
 import os
 from datetime import datetime
+from result_analizer import Report
 
 class DeviceTestApp:
     def __init__(self, root):
@@ -120,21 +121,11 @@ class DeviceTestApp:
                 checked.append(ip)
         return checked
     
+    def on_websocket_closed(self, ip, message):
+        messagebox.showerror(f'{ip}', f'{message}' )
+
     # ========== 测试开始前，清除显示 ==========
     def reset_test_result(self, ips):
-        # 1. 生成外层日期目录
-        date_str = datetime.now().strftime("%Y-%m-%d")
-        if not os.path.exists(date_str):
-            os.makedirs(date_str)
-            print(f"已创建日期根目录：{date_str}")
-
-        # 2. 在日期目录下，为每个勾选IP创建独立子文件夹
-        for ip in ips:
-            ip_dir = os.path.join(date_str, ip)
-            if not os.path.exists(ip_dir):
-                os.makedirs(ip_dir)
-                print(f"已创建设备目录：{ip_dir}")
-
         for ip, dev in self.devices.items():
             tree = dev['tree']
             for item_id in tree.get_children():
@@ -150,25 +141,35 @@ class DeviceTestApp:
         dev = self.devices.get(ip)
         if not dev:
             return
-        self.update_ui(ip, result)
         index = result[0]
         test_pass = result[1]    # True/False/Manual
-        report = dev['client'].get_ws_messages()
+        item_list = list(self.test_template.values())[index]
+        item_gcode = item_list.get('gcode').split(' ')[0]
+        item_name = item_list.get('测试项')
+        logs = dev['client'].get_ws_messages()
+        if logs and item_gcode != 'SYS_MODE':
+            report = Report()
+            mac = dev['client'].mac
+            if item_gcode == 'TEST_RESONANCES':
+                report.downfile(mac, ip, dev['test_time'], 'resonances_x_.csv')
+                report.downfile(mac, ip, dev['test_time'], 'resonances_y_.csv')
+            report.save_log(mac, item_name, dev['test_time'], logs)
+
         if test_pass == 'Manual':
             res = messagebox.askyesno(f"{ip}", "请确认是否继续")
             if res:
                 result[1] = True
-                self.update_ui(ip, result)
+                self.update_result(ip, result)
                 return True
             else:
                 result[1] = False
-                self.update_ui(ip, result)
+                self.update_result(ip, result)
                 return False
         else:
-            self.update_ui(ip, result)
+            self.update_result(ip, result)
             return True
-
-    def update_ui(self, ip, result:List):
+        
+    def update_result(self, ip, result:List):
         dev = self.devices.get(ip)
         if not dev:
             return
@@ -178,27 +179,29 @@ class DeviceTestApp:
         test_value = result[2]  # 测试值
         result_text = "PASS" if test_pass else "FAIL"
 
-        # 👇 必须用 after 安全更新 UI（tkinter 跨线程唯一正确写法）
-        self.root.after(0, self._update_tree_item, tree, row_index, test_value, result_text)
-
-    # ========== 真正执行 Tree 表格更新的内部函数 ==========
-    def _update_tree_item(self, tree, row_index, test_value, result_text):
         children = tree.get_children()
         if row_index < 0 or row_index >= len(children):
             return
         item_id = children[row_index]  # 用索引取 item_id
         current_values = tree.item(item_id, "values")
+        new_values = list(current_values)
+        new_values[2] = test_value
+        new_values[3] = result_text
+        dev['test_result'].append(new_values)
+        self.root.after(0, self._update_tree_item, tree, row_index, new_values)
+
+    # ========== 真正执行 Tree 表格更新的内部函数 ==========
+    def _update_tree_item(self, tree, row_index, new_values):
+        children = tree.get_children()
+        if row_index < 0 or row_index >= len(children):
+            return
+        item_id = children[row_index]  # 用索引取 item_id
 
         # 赋值：测试项、标准、测试值、结果
-        tree.item(item_id, values=(
-            current_values[0],
-            current_values[1],
-            test_value,
-            result_text
-        ))
+        tree.item(item_id, values = tuple(new_values))
 
         # 颜色高亮
-        if result_text == "PASS":
+        if new_values[3] == "PASS":
             tree.tag_configure("pass", background="#90EE90")  # 浅绿
             tree.item(item_id, tags=("pass",))
         else:
@@ -223,11 +226,19 @@ class DeviceTestApp:
         # 在线程中设置并运行新的事件循环
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        tasks = [self.devices[ip].get('client').test(self.test_template, self.test_complete_callback) for ip in ip_list]
+        for dev in self.devices.values():
+            dev['test_time'] = datetime.now().strftime("%H-%M-%S")
+            dev['test_result'] = []
+        tasks = [self.devices[ip].get('client').test(self.test_template, self.test_complete_callback, self.on_websocket_closed) for ip in ip_list]
 
         try:
             # 运行具体的协程
             result = loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
+            print(result)
+            report = Report()
+            for r in result:
+                dev = self.devices[r[2]]
+                report.save_report(r[1], dev['test_time'], dev['test_result'])
         except Exception as e:
             ''''''
             print("run_async_loop 错误 =>", e)
@@ -305,7 +316,9 @@ class DeviceTestApp:
             "var": var,
             "tab": tab,
             "tree": tree,
-            "client": HttpClient(ip)
+            "client": HttpClient(ip),
+            "test_time": None,
+            'test_result': []
         }
         # 刷新设备列表显示
         self.refresh_device_list()
