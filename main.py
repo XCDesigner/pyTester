@@ -2,7 +2,7 @@ from http_client import HttpClient
 import asyncio
 import os
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from tkinter import ttk, messagebox, filedialog, Button
 from cvs_reader import CSVReader
 import threading
 from typing import List
@@ -13,8 +13,8 @@ class DeviceTestApp:
     def __init__(self, root):
         self.root = root
         self.root.title("设备测试工具")
-        self.root.geometry("1280x720")
-        self.root.minsize(1000, 600)
+        self.root.geometry("1680x720")
+        self.root.minsize(1500, 600)
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.csv_reader = CSVReader()
         self.test_template = []
@@ -34,22 +34,22 @@ class DeviceTestApp:
         self.tab_control.pack(fill=tk.BOTH, expand=True, padx=3, pady=3)
 
         # 右侧控制面板
-        right_frame = ttk.Frame(main_pane, width=320)
+        right_frame = ttk.Frame(main_pane)
         main_pane.add(right_frame, weight=1)
         right_frame.grid_columnconfigure(0, weight=1)
 
         # 选择CSV文件按钮
-        ttk.Button(right_frame, text="选择测试项CSV文件", command=self.select_csv_file)\
-            .grid(row=0, column=0, sticky="ew", padx=10, pady=8)
+        self.btn_select_csv:Button =ttk.Button(right_frame, text="选择测试项CSV文件", command=self.select_csv_file)
+        self.btn_select_csv.grid(row=0, column=0, sticky="ew", padx=10, pady=8)
 
         # IP输入
         ttk.Label(right_frame, text="设备IP", font=("微软雅黑", 10)).grid(row=1, column=0, sticky="w", padx=10, pady=2)
-        self.ip_entry = ttk.Entry(right_frame, font=("微软雅黑", 10))
-        self.ip_entry.grid(row=2, column=0, sticky="ew", padx=10, pady=2)
+        self.ip_entry = ttk.Entry(right_frame, font=("微软雅黑", 10), state='normal')
+        self.ip_entry.grid(row=2, column=0, sticky="ew", padx=10, pady=10)
         self.ip_entry.insert(0, "127.0.0.1")
 
-        ttk.Button(right_frame, text="添加设备", command=self.add_device)\
-            .grid(row=3, column=0, sticky="ew", padx=10, pady=6)
+        self.btn_add_device:Button = ttk.Button(right_frame, text="添加设备", command=self.add_device)
+        self.btn_add_device.grid(row=3, column=0, sticky="ew", padx=10, pady=6)
         ttk.Label(right_frame, text="已添加设备（勾选测试）", font=("微软雅黑", 10))\
             .grid(row=4, column=0, sticky="w", padx=10, pady=(8, 2))
 
@@ -71,10 +71,10 @@ class DeviceTestApp:
         self.list_inner.bind("<Configure>", lambda e: self.list_canvas.configure(scrollregion=self.list_canvas.bbox("all")))
 
         # 功能按钮
-        ttk.Button(right_frame, text="删除勾选设备", command=self.delete_checked_devices)\
-            .grid(row=6, column=0, sticky="ew", padx=10, pady=3)
-        ttk.Button(right_frame, text="开始测试（勾选设备）", command=self.start_test)\
-            .grid(row=7, column=0, sticky="ew", padx=10, pady=(6, 12))
+        self.btn_remove_devices:Button = ttk.Button(right_frame, text="删除勾选设备", command=self.delete_checked_devices)
+        self.btn_remove_devices.grid(row=6, column=0, sticky="ew", padx=10, pady=3)
+        self.btn_start:Button = ttk.Button(right_frame, text="开始测试（勾选设备）", command=self.start_test)
+        self.btn_start.grid(row=7, column=0, sticky="ew", padx=10, pady=(6, 12))
 
     # ========== 选择CSV文件 ==========
     def select_csv_file(self):
@@ -207,6 +207,10 @@ class DeviceTestApp:
             tree.tag_configure("fail", background="#FFB6C1")  # 浅红
             tree.item(item_id, tags=("fail",))
 
+    def set_buttons_state(self, buttons:List[Button], new_state:str):
+        for btn in buttons:
+            self.root.after(0, lambda b=btn : b.config(state=new_state))
+
     # ========== 开始测试 ==========
     def start_test(self):
         if not self.test_template:
@@ -220,6 +224,7 @@ class DeviceTestApp:
         print(checked_ips)
         thread = threading.Thread(target=self.run_async_loop,args=(checked_ips,), daemon=True)
         thread.start()
+        self.set_buttons_state([self.btn_add_device, self.btn_remove_devices, self.btn_start, self.btn_select_csv], 'disabled')
     
     def run_async_loop(self, ip_list):
         # 在线程中设置并运行新的事件循环
@@ -242,26 +247,26 @@ class DeviceTestApp:
             ''''''
             print("run_async_loop 错误 =>", e)
         finally:
+            self.set_buttons_state([self.btn_add_device, self.btn_remove_devices, self.btn_start, self.btn_select_csv], 'normal')
             loop.close()
 
     # ------------------------------
     # 修复：设备列表刷新（渲染到带滚动的容器）
     # ------------------------------
-    def refresh_device_list(self):
+    def refresh_device_list(self, list_inner, list_canvas):
         # 清空原有复选框
-        for w in self.list_inner.winfo_children():
+        for w in list_inner.winfo_children():
             w.destroy()
         # 重新渲染所有设备的复选框
         for idx, ip in enumerate(self.devices.keys()):
             ttk.Checkbutton(
-                self.list_inner,
+                list_inner,
                 text=ip,
                 variable=self.devices[ip]["var"]
             ).grid(row=idx, column=0, sticky="w", padx=2, pady=1)
-        # 强制更新滚动区域
-        self.list_canvas.configure(scrollregion=self.list_canvas.bbox("all"))
+        # # 强制更新滚动区域
+        list_canvas.configure(scrollregion=self.list_canvas.bbox("all"))
 
-    # 修复：移除CSV前置校验，允许先加设备（核心改动2）
     def add_device_by_ip(self, ip):
         if not ip:
             messagebox.showwarning("提示", "IP地址不能为空！")
@@ -319,12 +324,12 @@ class DeviceTestApp:
             "test_time": None,
             'test_result': []
         }
-        # 刷新设备列表显示
-        self.refresh_device_list()
 
     def add_device(self):
         ip = self.ip_entry.get().strip()
         self.add_device_by_ip(ip)
+        # 刷新设备列表显示
+        self.root.after(0, self.refresh_device_list, self.list_inner, self.list_canvas)
 
     def delete_checked_devices(self):
         to_del = [ip for ip, info in self.devices.items() if info["var"].get()]
@@ -334,7 +339,7 @@ class DeviceTestApp:
         for ip in to_del:
             self.tab_control.forget(self.devices[ip]["tab"])
             del self.devices[ip]
-        self.refresh_device_list()
+        self.root.after(0, self.refresh_device_list, self.list_inner, self.list_canvas)
         messagebox.showinfo("成功", f"已删除 {len(to_del)} 个设备！")
 
     def load_machine_list(self):
@@ -348,7 +353,8 @@ class DeviceTestApp:
                     self.add_device_by_ip(ip)
                     ip_count += 1
             if ip_count > 0:
-                messagebox.showinfo("成功", f"从配置文件加载 {ip_count} 个设备！")
+                # 刷新设备列表显示
+                self.root.after(0, self.refresh_device_list, self.list_inner, self.list_canvas)
 
     def save_machine_list(self):
         with open("machinelist.txt", "w", encoding="utf-8") as f:
