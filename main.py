@@ -5,8 +5,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from cvs_reader import CSVReader
 import threading
-from typing import Dict, Optional, List
-import os
+from typing import List
 from datetime import datetime
 from result_analizer import Report
 

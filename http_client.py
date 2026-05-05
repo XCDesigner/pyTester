@@ -1,4 +1,3 @@
-import requests
 import json
 import asyncio
 from typing import Dict, Optional, List

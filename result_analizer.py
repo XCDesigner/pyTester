@@ -1,7 +1,7 @@
 import re
 from typing import Dict, List, Optional
 from datetime import datetime
-import os, pexpect, subprocess, paramiko
+import os, paramiko
 from scp import SCPClient
 import csv
 
