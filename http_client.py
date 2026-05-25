@@ -23,7 +23,7 @@ class HttpClient:
             'TEST_XY_RANGE': self.tst_xy_range,
             'ENCODER_TEST': self.encoder_test,
             'TEST_XY_SPEED': self.test_xy_speed,
-            # 'TEST_XY_SPEED_HYBRID': self.test_xy_speed_hybrid
+            'TEST_XY_SPEED_HYBRID': self.test_xy_speed_hybrid
         }
         self.mac = 'Unknow'
         self.ws: Optional[websockets.WebSocketClientProtocol] = None
@@ -206,6 +206,8 @@ class HttpClient:
         return [index, not not result, 'ok']
 
     async def wifi_info(self, index, gcode:str, test_item):
+        await self.send_gcode_safe('SET_PIN PIN=th_fan value=0', 10)
+        await self.send_gcode_safe('SET_PIN PIN=qcs_fan value=0', 10)
         await self.send_gcode_safe(gcode, 10)
         result = await self.wait_ws_message('SSID', 20)
         if result:
@@ -275,13 +277,13 @@ class HttpClient:
 
     async def test_resonances(self, index, gcode:str, test_item):
         ''''''
-        await self.send_gcode_safe('SET_PIN PIN=TH_FAN value=0', 10)
+        # await self.send_gcode_safe('SET_PIN PIN=TH_FAN value=0', 10)
         await self.send_gcode_safe('G28', 5 * 60)
         await asyncio.sleep(0.2)
         await self.send_gcode_safe(gcode, 10 * 60)
         await self.wait_ws_message('Resonances data written to', 20)
         await asyncio.sleep(0.2)
-        await self.send_gcode_safe('SET_PIN PIN=TH_FAN value=1', 10)
+        # await self.send_gcode_safe('SET_PIN PIN=TH_FAN value=1', 10)
         return [index, True, 'ok']
 
     async def tst_xy_range(self, index, gcode:str, test_item):
@@ -301,8 +303,8 @@ class HttpClient:
 
     async def encoder_test(self, index, gcode:str, test_item):
         ''''''
-        await self.send_gcode_safe(gcode, 5*60)
-        await asyncio.sleep(0.2)
+        await self.send_gcode_safe(gcode, 13*60)
+        await asyncio.sleep(0.5)
         parse_result = self.parse_result(self.ws_msg_list, 'max x deviation: {max_x_deviation:.03f}, max y deviation: {max_y_deviation:.03f}')
         result_x = parse_result.get('max_x_deviation', 100)
         result_y = parse_result.get('max_y_deviation', 100)
