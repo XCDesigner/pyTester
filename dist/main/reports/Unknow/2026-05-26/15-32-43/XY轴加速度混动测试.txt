@@ -1,0 +1,97 @@
+=========15-45-37==========
+Starting XY hybrid speed test (both X and Y axes)...
+Max Speed: 500.0 mm/s, Max Accel: 4000.0 mm/s²
+Homing...
+============================================================
+Testing acceleration: 1000 mm/s²
+============================================================
+Starting speed: 100 mm/s (for accel 1000 mm/s²)
+Testing speed: 100 mm/s
+Running script: a1000-v100.zip
+PASS at 100 mm/s (X dev: 0.088, Y dev: 0.072 mm)
+Testing speed: 200 mm/s
+Running script: a1000-v200.zip
+PASS at 200 mm/s (X dev: 0.009, Y dev: 0.002 mm)
+Testing speed: 300 mm/s
+Running script: a1000-v300.zip
+PASS at 300 mm/s (X dev: 0.009, Y dev: 0.001 mm)
+Testing speed: 400 mm/s
+Running script: a1000-v400.zip
+PASS at 400 mm/s (X dev: 0.008, Y dev: 0.001 mm)
+Testing speed: 500 mm/s
+Running script: a1000-v500.zip
+PASS at 500 mm/s (X dev: 0.013, Y dev: 0.001 mm)
+Accel 1000 mm/s²: Max valid speed = 500 mm/s
+============================================================
+Testing acceleration: 2000 mm/s²
+============================================================
+Starting speed: 100 mm/s (for accel 2000 mm/s²)
+Testing speed: 100 mm/s
+Running script: a2000-v100.zip
+PASS at 100 mm/s (X dev: 0.012, Y dev: 0.004 mm)
+Testing speed: 200 mm/s
+Running script: a2000-v200.zip
+PASS at 200 mm/s (X dev: 0.001, Y dev: 0.000 mm)
+Testing speed: 300 mm/s
+Running script: a2000-v300.zip
+PASS at 300 mm/s (X dev: 0.001, Y dev: 0.001 mm)
+Testing speed: 400 mm/s
+Running script: a2000-v400.zip
+PASS at 400 mm/s (X dev: 0.002, Y dev: 0.000 mm)
+Testing speed: 500 mm/s
+Running script: a2000-v500.zip
+PASS at 500 mm/s (X dev: 0.003, Y dev: 0.000 mm)
+Accel 2000 mm/s²: Max valid speed = 500 mm/s
+============================================================
+Testing acceleration: 3000 mm/s²
+============================================================
+Starting speed: 100 mm/s (for accel 3000 mm/s²)
+Testing speed: 100 mm/s
+Running script: a3000-v100.zip
+PASS at 100 mm/s (X dev: 0.002, Y dev: 0.001 mm)
+Testing speed: 200 mm/s
+Running script: a3000-v200.zip
+PASS at 200 mm/s (X dev: 0.001, Y dev: 0.003 mm)
+Testing speed: 300 mm/s
+Running script: a3000-v300.zip
+PASS at 300 mm/s (X dev: 0.000, Y dev: 0.001 mm)
+Testing speed: 400 mm/s
+Running script: a3000-v400.zip
+PASS at 400 mm/s (X dev: 0.004, Y dev: 0.000 mm)
+Testing speed: 500 mm/s
+Running script: a3000-v500.zip
+PASS at 500 mm/s (X dev: 0.004, Y dev: 0.001 mm)
+Accel 3000 mm/s²: Max valid speed = 500 mm/s
+============================================================
+Testing acceleration: 4000 mm/s²
+============================================================
+Starting speed: 100 mm/s (for accel 4000 mm/s²)
+Testing speed: 100 mm/s
+Running script: a4000-v100.zip
+PASS at 100 mm/s (X dev: 0.016, Y dev: 0.002 mm)
+Testing speed: 200 mm/s
+Running script: a4000-v200.zip
+PASS at 200 mm/s (X dev: 0.003, Y dev: 0.001 mm)
+Testing speed: 300 mm/s
+Running script: a4000-v300.zip
+PASS at 300 mm/s (X dev: 0.005, Y dev: 0.000 mm)
+Testing speed: 400 mm/s
+Running script: a4000-v400.zip
+PASS at 400 mm/s (X dev: 0.006, Y dev: 0.001 mm)
+Testing speed: 500 mm/s
+Running script: a4000-v500.zip
+PASS at 500 mm/s (X dev: 0.000, Y dev: 0.001 mm)
+Accel 4000 mm/s²: Max valid speed = 500 mm/s
+============================================================
+HYBRID SPEED TEST SUMMARY
+============================================================
+Axes: X and Y (hybrid motion)
+Accel (mm/s²)        Max Speed (mm/s)
+------------------------------------------------------------
+1000                 500
+2000                 500
+3000                 500
+4000                 500
+============================================================
+
+

@@ -19,6 +19,7 @@ class DeviceTestApp:
         self.csv_reader = CSVReader()
         self.test_template = []
         self.devices = {}
+        self.root.state("zoomed")
 
         self.create_widgets()
         self.load_machine_list()

@@ -199,11 +199,18 @@ class HttpClient:
         return {}
     
     async def sys_mode(self, index, gcode:str, test_item):
-        await self.send_gcode_safe(gcode, 10)
+        await self.send_gcode_safe(gcode, 300)
         await asyncio.sleep(5)
-        result = await self.wait_ws_message('Beeper started. H=1.0 L=0.1 C=1\n', 50)
+        # retry = 20
+        # result = False
+        # while retry :
+        #     if await self.send_gcode_safe('G90', 2) == True:
+        #         result = True
+        #         break
+        #     retry = retry - 1
+        result = await self.wait_ws_message('Machine is ready for operation.\n', 50)
         await asyncio.sleep(5)
-        return [index, not not result, 'ok']
+        return [index, result, 'ok']
 
     async def wifi_info(self, index, gcode:str, test_item):
         await self.send_gcode_safe('SET_PIN PIN=th_fan value=0', 10)
@@ -322,14 +329,55 @@ class HttpClient:
 
     async def test_xy_speed(self, index, gcode:str, test_item):
         ''''''
-        await self.send_gcode_safe(gcode, 10*60)
-        await asyncio.sleep(0.2)
+        await self.send_gcode_safe(gcode, 20*60)
+        await asyncio.sleep(1)
+        # test_result = self.ws_msg_list[-10:-1]
+        # test_result.reverse()
+        # try:
+        #     print(test_result[0].split())
+        #     accel, speed = test_result[0].split()
+        #     accel = int(accel)
+        #     speed = int(speed)
+        #     max_acc, max_v = test_item.get('标准').split(';')
+        #     maxaccel = float(max_acc.split(':')[1])
+        #     maxspeed = float(max_v.split(':')[1])
+        #     if accel >= maxaccel and speed >= maxspeed:
+        #         result = True
+        #     else:
+        #         result = False
+        # except Exception as e:
+        #     result = False
+        #     accel = 0
+        #     speed = 0
+        #     print(f'Test speed error: {e}')
+        # return [index, result, f'Acc:{accel} Speed:{speed}']
         return [index, 'Manual', 'ok']
 
     async def test_xy_speed_hybrid(self, index, gcode:str, test_item):
         ''''''
-        await self.send_gcode_safe(gcode, 10*60)
-        await asyncio.sleep(0.2)
+        await self.send_gcode_safe(gcode, 30*60)
+        print('hybrid 测试结束')
+        await asyncio.sleep(0.5)
+        # test_result = self.ws_msg_list[-10:-1]
+        # test_result.reverse()
+        # try:
+        #     print(test_result[0].split())
+        #     accel, speed = test_result[0].split()
+        #     accel = int(accel)
+        #     speed = int(speed)
+        #     max_acc, max_v = test_item.get('标准').split(';')
+        #     maxaccel = float(max_acc.split(':')[1])
+        #     maxspeed = float(max_v.split(':')[1])
+        #     if accel >= maxaccel and speed >= maxspeed:
+        #         result = True
+        #     else:
+        #         result = False
+        # except Exception as e:
+        #     result = False
+        #     accel = 0
+        #     speed = 0
+        #     print(f'Test speed error: {e}')
+        # return [index, result, f'Acc:{accel} Speed:{speed}']
         return [index, 'Manual', 'ok']
 
     async def dummy_test(self, index, gcode:str, test_item):
