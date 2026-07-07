@@ -385,6 +385,17 @@ class HttpClient:
         await asyncio.sleep(0.2)
         print(f'{self.ip}: test complete')
         return [index, True, 'ok']
+    
+    async def run_gcode(self, gcode: str, timeout=3):
+        ''''''
+        if not self.ws_connected:
+            await self.ws_connect()
+        self.clear_ws_messages()
+        await self.send_gcode_safe(gcode, timeout)
+        await asyncio.sleep(0.5)
+        res_msg = self.ws_msg_list
+        await self.ws_disconnect()
+        return res_msg
 
     async def test(self, test_items:Dict[str, Dict[str, str]], callback, error_callback):
         self.error_handler = error_callback

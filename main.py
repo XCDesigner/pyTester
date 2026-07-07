@@ -56,10 +56,12 @@ class DeviceTestApp:
         self.btn_query_ip:Button = ttk.Button(serial_container, text="获取设备IP", command=self.get_ip)
         self.btn_query_ip.grid(row=2, column=0, sticky="ew", padx=10, pady=3, columnspan=2)
 
-        self.lab_machine_ip = ttk.Label(serial_container, text="IP").grid(row=3, column=0, sticky="w", padx=5, pady=4)
-        self.lab_machine_ip = ttk.Label(serial_container, text="").grid(row=3, column=1, sticky="w", padx=5, pady=4)
-        self.lab_machine_ip = ttk.Label(serial_container, text="版本").grid(row=4, column=0, sticky="w", padx=5, pady=4)
-        self.lab_machine_ip = ttk.Label(serial_container, text="").grid(row=4, column=1, sticky="w", padx=5, pady=4)
+        ttk.Label(serial_container, text="IP").grid(row=3, column=0, sticky="w", padx=5, pady=4)
+        self.lab_machine_ip = ttk.Label(serial_container, text="")
+        self.lab_machine_ip.grid(row=3, column=1, sticky="w", padx=5, pady=4)
+        ttk.Label(serial_container, text="版本").grid(row=4, column=0, sticky="w", padx=5, pady=4)
+        self.lab_version = ttk.Label(serial_container, text="")
+        self.lab_version.grid(row=4, column=1, sticky="w", padx=5, pady=4)
 
         # 传感器按钮
         sensor_container = ttk.LabelFrame(left_frame, text="传感器单项测试")
@@ -131,7 +133,6 @@ class DeviceTestApp:
         self.btn_remove_devices.grid(row=6, column=0, sticky="ew", padx=10, pady=3)
         self.btn_start:Button = ttk.Button(right_frame, text="开始测试（勾选设备）", command=self.start_test)
         self.btn_start.grid(row=7, column=0, sticky="ew", padx=10, pady=(6, 12))
-
         
     def refresh_port(self):
         ports = self.serial_port.get_all_com_ports()
@@ -159,21 +160,29 @@ class DeviceTestApp:
     
     def get_ip(self):
         ip = self.serial_port.run_command(command='WIFI_INFO')
+        self.root.after(0, self.lab_machine_ip.config(text=ip))
 
     def beeper_test(self):
-        self.serial_port.run_command(command='BEEPER_START', count=3)
+        msg_list = self.select_run_gcode('BEEPER_START H=0.2 L=0.2 C=3')
+        print(msg_list)
 
     def pd_test(self):
-        ''''''
+        msg_list = self.select_run_gcode('PD_TEST')
 
     def door_test(self):
-        ''''''
+        msg_list = self.select_run_gcode('QUERY_DOOR')
 
     def drawer_test(self):
-        ''''''
+        msg_list = self.select_run_gcode('QUERY_DOOR')
 
     def temp_test(self):
-        ''''''
+        msg_list = self.select_run_gcode('GET_BLUE_TEMP')
+
+    def select_run_gcode(self, gcode):
+        sel_ip = self.com_ips.get()
+        sel_device = self.devices.get(sel_ip)
+        res = asyncio.run(sel_device.get('client').run_gcode(gcode))
+        return res
 
     # ========== 选择CSV文件 ==========
     def select_csv_file(self):
