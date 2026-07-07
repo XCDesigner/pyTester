@@ -8,6 +8,7 @@ import threading
 from typing import List
 from datetime import datetime
 from result_analizer import Report
+from serial_port import SerialTester
 
 class DeviceTestApp:
     def __init__(self, root):
@@ -20,18 +21,72 @@ class DeviceTestApp:
         self.test_template = []
         self.devices = {}
         self.root.state("zoomed")
+        self.serial_port = SerialTester()
 
         self.create_widgets()
         self.load_machine_list()
 
     def create_widgets(self):
         main_pane = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
-        main_pane.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        main_pane.pack(fill=tk.X, expand=False, padx=5, pady=5)
 
-        # 左侧 TAB
+        # 左侧面版
         left_frame = ttk.Frame(main_pane)
-        main_pane.add(left_frame, weight=4)
-        self.tab_control = ttk.Notebook(left_frame)
+        main_pane.add(left_frame, weight=2)
+        left_frame.grid_columnconfigure(0, weight=1)
+        left_frame.grid_rowconfigure(0, weight=1)
+
+        # 串口
+        serial_container = ttk.LabelFrame(left_frame, text="串口")
+        serial_container.grid(row=0, column=0, sticky='ew', padx=5, pady=5)
+        serial_container.grid_columnconfigure(0, weight=2)
+        serial_container.grid_columnconfigure(1, weight=1)
+        serial_container.grid(row=0, column=0, sticky='ew')
+
+        ttk.Label(serial_container, text="COM端口:").grid(row=0, column=0, sticky="w", padx=5, pady=4)
+        self.com_combo = ttk.Combobox(serial_container, state="readonly")
+        self.com_combo.grid(row=0, column=1, sticky="ew", padx=5, pady=4)
+
+        self.btn_fresh_port:Button = ttk.Button(serial_container, text="刷新", command=self.refresh_port)
+        self.btn_fresh_port.grid(row=1, column=0, sticky="ew", padx=10, pady=3)
+
+        self.btn_open_serial:Button = ttk.Button(serial_container, text="打开串口", command=self.open_serial)
+        self.btn_open_serial.grid(row=1, column=1, sticky="ew", padx=10, pady=3)
+
+        self.btn_query_ip:Button = ttk.Button(serial_container, text="获取设备IP", command=self.get_ip)
+        self.btn_query_ip.grid(row=2, column=0, sticky="ew", padx=10, pady=3, columnspan=2)
+
+        self.lab_machine_ip = ttk.Label(serial_container, text="IP").grid(row=3, column=0, sticky="w", padx=5, pady=4)
+        self.lab_machine_ip = ttk.Label(serial_container, text="").grid(row=3, column=1, sticky="w", padx=5, pady=4)
+        self.lab_machine_ip = ttk.Label(serial_container, text="版本").grid(row=4, column=0, sticky="w", padx=5, pady=4)
+        self.lab_machine_ip = ttk.Label(serial_container, text="").grid(row=4, column=1, sticky="w", padx=5, pady=4)
+
+        # 传感器按钮
+        sensor_container = ttk.LabelFrame(left_frame, text="传感器单项测试")
+        sensor_container.grid(row=1, column=0, sticky='ew', padx=5, pady=5)
+        sensor_container.grid_columnconfigure(0, weight=3)
+        sensor_container.grid_columnconfigure(1, weight=1)
+        sensor_container.grid(row=1, column=0)
+
+        ttk.Label(sensor_container, text="设备:").grid(row=0, column=0, sticky="ew", padx=5, pady=4)
+        self.com_ips = ttk.Combobox(sensor_container, state="readonly")
+        self.com_ips.grid(row=0, column=1, sticky="ew", padx=5, pady=4)
+
+        self.btn_beeper_test:Button = ttk.Button(sensor_container, text="蜂鸣器响3声", command=self.beeper_test)
+        self.btn_beeper_test.grid(row=1, column=0, sticky="ew", padx=10, pady=3)
+        self.btn_pd_test:Button = ttk.Button(sensor_container, text="PD自检", command=self.pd_test)
+        self.btn_pd_test.grid(row=2, column=0, sticky="ew", padx=10, pady=(6, 12))
+        self.btn_door_test:Button = ttk.Button(sensor_container, text="门开关检测", command=self.door_test)
+        self.btn_door_test.grid(row=3, column=0, sticky="ew", padx=10, pady=(6, 12))
+        self.btn_drawer_test:Button = ttk.Button(sensor_container, text="抽屉检测", command=self.drawer_test)
+        self.btn_drawer_test.grid(row=4, column=0, sticky="ew", padx=10, pady=(6, 12))
+        self.btn_temp_test:Button = ttk.Button(sensor_container, text="温度检测", command=self.temp_test)
+        self.btn_temp_test.grid(row=5, column=0, sticky="ew", padx=10, pady=(6, 12))
+
+        # 中间 TAB
+        min_frame = ttk.Frame(main_pane)
+        main_pane.add(min_frame, weight=4)
+        self.tab_control = ttk.Notebook(min_frame)
         self.tab_control.pack(fill=tk.BOTH, expand=True, padx=3, pady=3)
 
         # 右侧控制面板
@@ -76,6 +131,49 @@ class DeviceTestApp:
         self.btn_remove_devices.grid(row=6, column=0, sticky="ew", padx=10, pady=3)
         self.btn_start:Button = ttk.Button(right_frame, text="开始测试（勾选设备）", command=self.start_test)
         self.btn_start.grid(row=7, column=0, sticky="ew", padx=10, pady=(6, 12))
+
+        
+    def refresh_port(self):
+        ports = self.serial_port.get_all_com_ports()
+        self.com_combo["values"] = ports
+        if ports:
+            self.com_combo.current(0)
+        
+    def open_serial(self):
+        selected_com = self.com_combo.get().strip()
+        if not selected_com:
+            messagebox.showwarning("提示", "请先选择COM端口！")
+            return
+        # 判断当前串口状态
+        if self.serial_port.ser and self.serial_port.ser.is_open:
+            self.serial_port.close_port()
+            self.btn_open_serial.config(text="打开串口")
+            messagebox.showinfo("串口", "串口已关闭")
+        else:
+            ret = self.serial_port.open_port(selected_com, baudrate=115200)
+            if ret:
+                self.btn_open_serial.config(text="关闭串口")
+                messagebox.showinfo("串口", f"{selected_com} 打开成功")
+            else:
+                messagebox.showerror("串口", "打开失败，请检查端口占用")
+    
+    def get_ip(self):
+        ip = self.serial_port.run_command(command='WIFI_INFO')
+
+    def beeper_test(self):
+        self.serial_port.run_command(command='BEEPER_START', count=3)
+
+    def pd_test(self):
+        ''''''
+
+    def door_test(self):
+        ''''''
+
+    def drawer_test(self):
+        ''''''
+
+    def temp_test(self):
+        ''''''
 
     # ========== 选择CSV文件 ==========
     def select_csv_file(self):
@@ -265,6 +363,8 @@ class DeviceTestApp:
                 text=ip,
                 variable=self.devices[ip]["var"]
             ).grid(row=idx, column=0, sticky="w", padx=2, pady=1)
+        self.com_ips['values'] = list(self.devices.keys())
+        self.com_ips.current(0)
         # # 强制更新滚动区域
         list_canvas.configure(scrollregion=self.list_canvas.bbox("all"))
 
