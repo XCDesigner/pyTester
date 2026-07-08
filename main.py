@@ -89,6 +89,8 @@ class DeviceTestApp:
         self.btn_temp_test.grid(row=5, column=0, sticky="ew", padx=10, pady=(6, 12))
         self.btn_panelled_test:Button = ttk.Button(sensor_container, text="面版灯测试", command=self.temp_panel)
         self.btn_panelled_test.grid(row=6, column=0, sticky="ew", padx=10, pady=(6, 12))
+        self.btn_reset_sensors_setting:Button = ttk.Button(sensor_container, text="恢复传感器设置", command=self.reset_sensor_settings)
+        self.btn_reset_sensors_setting.grid(row=7, column=0, sticky="ew", padx=10, pady=(6, 12))
 
         # 中间 TAB
         min_frame = ttk.Frame(main_pane)
@@ -192,6 +194,9 @@ class DeviceTestApp:
         time.sleep(0.2)
         msg_list = self.select_run_gcode('SET_LED R=0 G=0 B=80', 1)
         time.sleep(0.2)
+
+    def reset_sensor_settings(self):
+        ''''''
 
     def select_run_gcode(self, gcode, timeout=3):
         sel_ip = self.com_ips.get()
