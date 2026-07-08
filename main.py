@@ -196,27 +196,29 @@ class DeviceTestApp:
     def select_run_gcode(self, gcode, timeout=3):
         sel_ip = self.com_ips.get()
         sel_device = self.devices.get(sel_ip)
-        self.wait_completion = WaitCompletion()
+        wait_completion = WaitCompletion()
         thread = Thread(
             target=self.run_gcode_thread,
-            args=(sel_device, gcode, timeout),
+            args=(sel_device, wait_completion, gcode, timeout),
             daemon=True
             )
         thread.start()
-        res = self.wait_completion.wait()
+        res = wait_completion.wait()
         print(f'wait:{res}')
         return res
     
-    def run_gcode_thread(self, sel_device, gcode: str, timeout=3):
+    def run_gcode_thread(self, sel_device, wait_comp, gcode: str, timeout=3):
         try:
             gcode_event_loop = asyncio.new_event_loop()
             asyncio.set_event_loop(gcode_event_loop)
             res = gcode_event_loop.run_until_complete(sel_device.get('client').run_gcode(gcode, timeout))
+            # gcode_event_loop.run_until_complete(sel_device.get('client')._http_session.close())
             print(f'eventloop closed')
-            self.wait_completion.complete(res)
+            wait_comp.complete(res)
             gcode_event_loop.close()
         except Exception as e:
             print(f"{e}")
+            wait_comp.complete(None)
 
     # ========== 选择CSV文件 ==========
     def select_csv_file(self):

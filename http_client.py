@@ -396,6 +396,7 @@ class HttpClient:
         res_msg = self.ws_msg_list
         await self.ws_disconnect()
         await asyncio.sleep(0.5)
+        await self._http_session.close()
         return res_msg
 
     async def test(self, test_items:Dict[str, Dict[str, str]], callback, error_callback):
@@ -418,4 +419,5 @@ class HttpClient:
                 await self.ws_disconnect()
                 return False, self.mac, self.ip
         await self.ws_disconnect()
+        await self._http_session.close()
         return True, self.mac, self.ip
