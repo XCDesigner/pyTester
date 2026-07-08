@@ -1,14 +1,15 @@
 from http_client import HttpClient
 import asyncio
-import os
+import os, time
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, Button
 from cvs_reader import CSVReader
 import threading
+from threading import Thread
 from typing import List
 from datetime import datetime
 from result_analizer import Report
-from serial_port import SerialTester
+from serial_port import SerialTester, WaitCompletion
 
 class DeviceTestApp:
     def __init__(self, root):
@@ -39,7 +40,7 @@ class DeviceTestApp:
         # 串口
         serial_container = ttk.LabelFrame(left_frame, text="串口")
         serial_container.grid(row=0, column=0, sticky='ew', padx=5, pady=5)
-        serial_container.grid_columnconfigure(0, weight=2)
+        serial_container.grid_columnconfigure(0, weight=4)
         serial_container.grid_columnconfigure(1, weight=1)
         serial_container.grid(row=0, column=0, sticky='ew')
 
@@ -54,7 +55,9 @@ class DeviceTestApp:
         self.btn_open_serial.grid(row=1, column=1, sticky="ew", padx=10, pady=3)
 
         self.btn_query_ip:Button = ttk.Button(serial_container, text="获取设备IP", command=self.get_ip)
-        self.btn_query_ip.grid(row=2, column=0, sticky="ew", padx=10, pady=3, columnspan=2)
+        self.btn_query_ip.grid(row=2, column=0, sticky="ew", padx=10, pady=3)
+        self.btn_add_ip_to_list:Button = ttk.Button(serial_container, text="添加到列表", command=self.add_to_list)
+        self.btn_add_ip_to_list.grid(row=2, column=1, sticky="ew", padx=10, pady=3)
 
         ttk.Label(serial_container, text="IP").grid(row=3, column=0, sticky="w", padx=5, pady=4)
         self.lab_machine_ip = ttk.Label(serial_container, text="")
@@ -80,10 +83,12 @@ class DeviceTestApp:
         self.btn_pd_test.grid(row=2, column=0, sticky="ew", padx=10, pady=(6, 12))
         self.btn_door_test:Button = ttk.Button(sensor_container, text="门开关检测", command=self.door_test)
         self.btn_door_test.grid(row=3, column=0, sticky="ew", padx=10, pady=(6, 12))
-        self.btn_drawer_test:Button = ttk.Button(sensor_container, text="抽屉检测", command=self.drawer_test)
-        self.btn_drawer_test.grid(row=4, column=0, sticky="ew", padx=10, pady=(6, 12))
+        self.lab_door_state = ttk.Label(serial_container, text="")
+        self.lab_door_state.grid(row=4, column=0, sticky="w", padx=5, pady=4)
         self.btn_temp_test:Button = ttk.Button(sensor_container, text="温度检测", command=self.temp_test)
         self.btn_temp_test.grid(row=5, column=0, sticky="ew", padx=10, pady=(6, 12))
+        self.btn_panelled_test:Button = ttk.Button(sensor_container, text="面版灯测试", command=self.temp_panel)
+        self.btn_panelled_test.grid(row=6, column=0, sticky="ew", padx=10, pady=(6, 12))
 
         # 中间 TAB
         min_frame = ttk.Frame(main_pane)
@@ -143,7 +148,7 @@ class DeviceTestApp:
     def open_serial(self):
         selected_com = self.com_combo.get().strip()
         if not selected_com:
-            messagebox.showwarning("提示", "请先选择COM端口！")
+            messagebox.showwarning("提示", "请先选择COM端口!")
             return
         # 判断当前串口状态
         if self.serial_port.ser and self.serial_port.ser.is_open:
@@ -162,27 +167,56 @@ class DeviceTestApp:
         ip = self.serial_port.run_command(command='WIFI_INFO')
         self.root.after(0, self.lab_machine_ip.config(text=ip))
 
+    def add_to_list(self):
+        ip = self.lab_machine_ip['text']
+        self.add_device_by_ip(ip)
+        self.root.after(0, self.refresh_device_list, self.list_inner, self.list_canvas)
+
     def beeper_test(self):
         msg_list = self.select_run_gcode('BEEPER_START H=0.2 L=0.2 C=3')
-        print(msg_list)
+        print('ttt')
 
     def pd_test(self):
         msg_list = self.select_run_gcode('PD_TEST')
 
     def door_test(self):
-        msg_list = self.select_run_gcode('QUERY_DOOR')
-
-    def drawer_test(self):
-        msg_list = self.select_run_gcode('QUERY_DOOR')
+        msg_list = self.select_run_gcode('DOOR_QUERY', 10)
 
     def temp_test(self):
-        msg_list = self.select_run_gcode('GET_BLUE_TEMP')
+        msg_list = self.select_run_gcode('BLUE_TEMP_GET')
 
-    def select_run_gcode(self, gcode):
+    def temp_panel(self):
+        msg_list = self.select_run_gcode('SET_LED R=80 G=0 B=0', 1)
+        time.sleep(0.2)
+        msg_list = self.select_run_gcode('SET_LED R=0 G=80 B=0', 1)
+        time.sleep(0.2)
+        msg_list = self.select_run_gcode('SET_LED R=0 G=0 B=80', 1)
+        time.sleep(0.2)
+
+    def select_run_gcode(self, gcode, timeout=3):
         sel_ip = self.com_ips.get()
         sel_device = self.devices.get(sel_ip)
-        res = asyncio.run(sel_device.get('client').run_gcode(gcode))
+        self.wait_completion = WaitCompletion()
+        thread = Thread(
+            target=self.run_gcode_thread,
+            args=(sel_device, gcode, timeout),
+            daemon=True
+            )
+        thread.start()
+        res = self.wait_completion.wait()
+        print(f'wait:{res}')
         return res
+    
+    def run_gcode_thread(self, sel_device, gcode: str, timeout=3):
+        try:
+            gcode_event_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(gcode_event_loop)
+            res = gcode_event_loop.run_until_complete(sel_device.get('client').run_gcode(gcode, timeout))
+            print(f'eventloop closed')
+            self.wait_completion.complete(res)
+            gcode_event_loop.close()
+        except Exception as e:
+            print(f"{e}")
 
     # ========== 选择CSV文件 ==========
     def select_csv_file(self):

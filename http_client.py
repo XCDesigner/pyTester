@@ -391,10 +391,11 @@ class HttpClient:
         if not self.ws_connected:
             await self.ws_connect()
         self.clear_ws_messages()
-        await self.send_gcode_safe(gcode, timeout)
+        await self.send_gcode_safe(gcode)
         await asyncio.sleep(0.5)
         res_msg = self.ws_msg_list
         await self.ws_disconnect()
+        await asyncio.sleep(0.5)
         return res_msg
 
     async def test(self, test_items:Dict[str, Dict[str, str]], callback, error_callback):
