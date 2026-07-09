@@ -1,3 +1,5 @@
 *.csv
 reports/*
 __pycache__/**
+build/*
+dist/*
