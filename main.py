@@ -1,6 +1,6 @@
 from http_client import HttpClient
 import asyncio
-import os, time
+import os, time, re
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, Button
 from cvs_reader import CSVReader
@@ -29,18 +29,18 @@ class DeviceTestApp:
 
     def create_widgets(self):
         main_pane = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
-        main_pane.pack(fill=tk.X, expand=False, padx=5, pady=5)
+        main_pane.pack(fill=tk.BOTH, expand=False, padx=5, pady=5)
 
         # 左侧面版
         left_frame = ttk.Frame(main_pane)
-        main_pane.add(left_frame, weight=2)
-        left_frame.grid_columnconfigure(0, weight=1)
+        main_pane.add(left_frame, weight=5)
+        left_frame.grid_columnconfigure(0, weight=2)
         left_frame.grid_rowconfigure(0, weight=1)
 
         # 串口
         serial_container = ttk.LabelFrame(left_frame, text="串口")
         serial_container.grid(row=0, column=0, sticky='ew', padx=5, pady=5)
-        serial_container.grid_columnconfigure(0, weight=4)
+        serial_container.grid_columnconfigure(0, weight=2)
         serial_container.grid_columnconfigure(1, weight=1)
         serial_container.grid(row=0, column=0, sticky='ew')
 
@@ -83,8 +83,8 @@ class DeviceTestApp:
         self.btn_pd_test.grid(row=2, column=0, sticky="ew", padx=10, pady=(6, 12))
         self.btn_door_test:Button = ttk.Button(sensor_container, text="门开关检测", command=self.door_test)
         self.btn_door_test.grid(row=3, column=0, sticky="ew", padx=10, pady=(6, 12))
-        self.lab_door_state = ttk.Label(serial_container, text="")
-        self.lab_door_state.grid(row=4, column=0, sticky="w", padx=5, pady=4)
+        self.lab_door_state = ttk.Label(sensor_container, text="")
+        self.lab_door_state.grid(row=3, column=1, sticky="w", padx=5, pady=4)
         self.btn_temp_test:Button = ttk.Button(sensor_container, text="温度检测", command=self.temp_test)
         self.btn_temp_test.grid(row=5, column=0, sticky="ew", padx=10, pady=(6, 12))
         self.btn_panelled_test:Button = ttk.Button(sensor_container, text="面版灯测试", command=self.temp_panel)
@@ -92,15 +92,20 @@ class DeviceTestApp:
         self.btn_reset_sensors_setting:Button = ttk.Button(sensor_container, text="恢复传感器设置", command=self.reset_sensor_settings)
         self.btn_reset_sensors_setting.grid(row=7, column=0, sticky="ew", padx=10, pady=(6, 12))
 
+        self.lab_temp = ttk.Label(sensor_container, text="")
+        self.lab_temp.grid(row=5, column=1, sticky="e", padx=5, pady=4)
+
         # 中间 TAB
         min_frame = ttk.Frame(main_pane)
-        main_pane.add(min_frame, weight=4)
+        main_pane.add(min_frame, weight=3)
         self.tab_control = ttk.Notebook(min_frame)
         self.tab_control.pack(fill=tk.BOTH, expand=True, padx=3, pady=3)
+        min_frame.grid_columnconfigure(0, weight=1)
+        min_frame.grid_rowconfigure(0, weight=1)
 
         # 右侧控制面板
         right_frame = ttk.Frame(main_pane)
-        main_pane.add(right_frame, weight=1)
+        main_pane.add(right_frame, weight=2)
         right_frame.grid_columnconfigure(0, weight=1)
 
         # 选择CSV文件按钮
@@ -167,7 +172,7 @@ class DeviceTestApp:
     
     def get_ip(self):
         ip = self.serial_port.run_command(command='WIFI_INFO')
-        self.root.after(0, self.lab_machine_ip.config(text=ip))
+        self.root.after(0, lambda: self.lab_machine_ip.config(text=ip))
 
     def add_to_list(self):
         ip = self.lab_machine_ip['text']
@@ -176,16 +181,37 @@ class DeviceTestApp:
 
     def beeper_test(self):
         msg_list = self.select_run_gcode('BEEPER_START H=0.2 L=0.2 C=3')
-        print('ttt')
 
     def pd_test(self):
         msg_list = self.select_run_gcode('PD_TEST')
 
     def door_test(self):
-        msg_list = self.select_run_gcode('DOOR_QUERY', 10)
+        try:
+            msg_list = self.select_run_gcode('DOOR_QUERY', 10)
+            line = msg_list[0]
+            data = {k.strip():v.strip() for k, v in re.findall(r"([\w ]+):\s*(\w+)",line)}
+            str_hall_state = f''
+            if data["Chassis Status"] == 'Closed': str_hall_state += '门已关  '
+            else: str_hall_state += '门已开  '
+            if data["Drawer"] == 'Closed': str_hall_state += '抽屉已关'
+            else: str_hall_state += '抽屉已开'
+            self.root.after(0, lambda: self.lab_door_state.config(text=str_hall_state))
+        except Exception as e:
+            messagebox.showinfo(f'门状态', f'{e}')
 
     def temp_test(self):
-        msg_list = self.select_run_gcode('BLUE_TEMP_GET')
+        try:
+            msg_list = self.select_run_gcode('BLUE_TEMP_GET')
+            temp_line = msg_list[0]
+            data = list({k: float(v) for k, v in (p.split(":") for p in temp_line.split(","))}.values())
+            str_blue_temp = f'T0:{data[0]} T1:{data[1]} T2:{data[2]}'
+            msg_list = self.select_run_gcode('LW_TEMP_GET', 10)
+            temp_line = msg_list[0]
+            data = list({k: float(v) for k, v in (p.split(":") for p in temp_line.split(","))}.values())
+            str_optical_temp = f'QCS:{data[0]} SEP:{data[1]} GALVO:{data[2]}'
+            self.root.after(0, lambda: self.lab_temp.config(text=str_blue_temp + "\n" + str_optical_temp))
+        except Exception as e:
+            messagebox.showinfo(f'获取温度失败', f'{e}')
 
     def temp_panel(self):
         msg_list = self.select_run_gcode('SET_LED R=80 G=0 B=0', 1)
@@ -208,7 +234,7 @@ class DeviceTestApp:
             daemon=True
             )
         thread.start()
-        res = wait_completion.wait()
+        res = wait_completion.wait(timeout)
         print(f'wait:{res}')
         return res
     
@@ -217,13 +243,12 @@ class DeviceTestApp:
             gcode_event_loop = asyncio.new_event_loop()
             asyncio.set_event_loop(gcode_event_loop)
             res = gcode_event_loop.run_until_complete(sel_device.get('client').run_gcode(gcode, timeout))
-            # gcode_event_loop.run_until_complete(sel_device.get('client')._http_session.close())
-            print(f'eventloop closed')
             wait_comp.complete(res)
-            gcode_event_loop.close()
         except Exception as e:
             print(f"{e}")
             wait_comp.complete(None)
+        finally:
+            gcode_event_loop.close()
 
     # ========== 选择CSV文件 ==========
     def select_csv_file(self):
