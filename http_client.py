@@ -208,7 +208,7 @@ class HttpClient:
         #         result = True
         #         break
         #     retry = retry - 1
-        result = await self.wait_ws_message('Machine is ready for operation.\n', 50)
+        result = await self.wait_ws_message('Machine is ready for operation.', 50)
         await asyncio.sleep(5)
         return [index, result, 'ok']
 

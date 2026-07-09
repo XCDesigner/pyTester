@@ -74,7 +74,7 @@ class SerialPort:
     def wait_reack(self, string_to_wait):
         self.wait_complete = WaitCompletion()
         self.string_to_wait = string_to_wait
-        result = self.wait_complete.wait(5, None)
+        result = self.wait_complete.wait(2, None)
         self.wait_complete = None
         return result
 

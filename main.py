@@ -28,21 +28,51 @@ class DeviceTestApp:
         self.load_machine_list()
 
     def create_widgets(self):
-        main_pane = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
-        main_pane.pack(fill=tk.BOTH, expand=False, padx=5, pady=5)
+        # 最顶层Tab容器
+        main_tab = ttk.Notebook(self.root)
+        main_tab.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        # 左侧面版
-        left_frame = ttk.Frame(main_pane)
-        main_pane.add(left_frame, weight=5)
-        left_frame.grid_columnconfigure(0, weight=2)
-        left_frame.grid_rowconfigure(0, weight=1)
+        # =========== Tab1：单机测试，放入原来左侧left_frame ===========
+        tab_single = ttk.Frame(main_tab)
+        main_tab.add(tab_single, text="单机测试")
+        tab_single.grid_columnconfigure(0, weight=1)
+        tab_single.grid_rowconfigure(0, weight=1)
+        tab_single.grid_rowconfigure(1, weight=2)
 
-        # 串口
-        serial_container = ttk.LabelFrame(left_frame, text="串口")
-        serial_container.grid(row=0, column=0, sticky='ew', padx=5, pady=5)
+        tab1_left_frame = ttk.Frame(tab_single)
+        tab1_left_frame.grid(row=0, column=0, sticky='ewns', padx=5, pady=5)
+        tab1_left_frame.grid_columnconfigure(0, weight=1)
+        tab1_left_frame.grid_columnconfigure(1, weight=2)
+        tab1_left_frame.grid_rowconfigure(0, weight=1)
+
+        tab1_right_frame = ttk.Frame(tab_single)
+        tab1_right_frame.grid(row=0, column=1, sticky='ewns', padx=5, pady=5)
+        tab1_right_frame.grid_columnconfigure(0, weight=1)
+        tab1_right_frame.grid_rowconfigure(1, weight=1)
+
+        # ----------------------新增：日志区域----------------------
+        log_frame = ttk.LabelFrame(tab1_right_frame, text="运行日志")
+        log_frame.grid(row=0, column=0, sticky="nsew", padx=4, pady=4)
+        log_frame.grid_rowconfigure(0, weight=1)
+        log_frame.grid_columnconfigure(0, weight=1)
+
+        # 垂直滚动条
+        log_scroll = ttk.Scrollbar(log_frame)
+        log_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # 文本框
+        self.log_text = tk.Text(log_frame, yscrollcommand=log_scroll.set, font=("Consolas",9))
+        log_scroll.config(command=self.log_text.yview)
+        self.log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.log_text.config(state=tk.DISABLED) # 设置默认只读
+# ----------------------------------------------------------
+
+        # 串口区域
+        serial_container = ttk.LabelFrame(tab1_left_frame, text="串口")
+        serial_container.grid(row=0, column=0, sticky='ewns', padx=5, pady=5)
         serial_container.grid_columnconfigure(0, weight=2)
-        serial_container.grid_columnconfigure(1, weight=1)
-        serial_container.grid(row=0, column=0, sticky='ew')
+        serial_container.grid_columnconfigure(1, weight=3)
+        serial_container.grid_columnconfigure(2, weight=8)
 
         ttk.Label(serial_container, text="COM端口:").grid(row=0, column=0, sticky="w", padx=5, pady=4)
         self.com_combo = ttk.Combobox(serial_container, state="readonly")
@@ -66,12 +96,12 @@ class DeviceTestApp:
         self.lab_version = ttk.Label(serial_container, text="")
         self.lab_version.grid(row=4, column=1, sticky="w", padx=5, pady=4)
 
-        # 传感器按钮
-        sensor_container = ttk.LabelFrame(left_frame, text="传感器单项测试")
+        # 传感器单项测试区域
+        sensor_container = ttk.LabelFrame(tab1_left_frame, text="传感器单项测试")
         sensor_container.grid(row=1, column=0, sticky='ew', padx=5, pady=5)
-        sensor_container.grid_columnconfigure(0, weight=3)
-        sensor_container.grid_columnconfigure(1, weight=1)
-        sensor_container.grid(row=1, column=0)
+        sensor_container.grid_columnconfigure(0, weight=1)
+        sensor_container.grid_columnconfigure(1, weight=2)
+        sensor_container.grid_columnconfigure(2, weight=5)
 
         ttk.Label(sensor_container, text="设备:").grid(row=0, column=0, sticky="ew", padx=5, pady=4)
         self.com_ips = ttk.Combobox(sensor_container, state="readonly")
@@ -93,26 +123,30 @@ class DeviceTestApp:
         self.btn_reset_sensors_setting.grid(row=7, column=0, sticky="ew", padx=10, pady=(6, 12))
 
         self.lab_temp = ttk.Label(sensor_container, text="")
-        self.lab_temp.grid(row=5, column=1, sticky="e", padx=5, pady=4)
+        self.lab_temp.grid(row=5, column=1, sticky="ew", padx=5, pady=4)
 
-        # 中间 TAB
-        min_frame = ttk.Frame(main_pane)
-        main_pane.add(min_frame, weight=3)
+        # =========== Tab2：性能测试：中间区域+右侧区域做水平分栏 ===========
+        tab_perf = ttk.Frame(main_tab)
+        main_tab.add(tab_perf, text="性能测试")
+        perf_pane = ttk.PanedWindow(tab_perf, orient=tk.HORIZONTAL)
+        perf_pane.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        # 中间Tab页（设备测试结果表格）
+        min_frame = ttk.Frame(perf_pane)
+        perf_pane.add(min_frame, weight=3)
         self.tab_control = ttk.Notebook(min_frame)
         self.tab_control.pack(fill=tk.BOTH, expand=True, padx=3, pady=3)
         min_frame.grid_columnconfigure(0, weight=1)
         min_frame.grid_rowconfigure(0, weight=1)
 
         # 右侧控制面板
-        right_frame = ttk.Frame(main_pane)
-        main_pane.add(right_frame, weight=2)
+        right_frame = ttk.Frame(perf_pane)
+        perf_pane.add(right_frame, weight=2)
         right_frame.grid_columnconfigure(0, weight=1)
 
-        # 选择CSV文件按钮
         self.btn_select_csv:Button =ttk.Button(right_frame, text="选择测试项CSV文件", command=self.select_csv_file)
         self.btn_select_csv.grid(row=0, column=0, sticky="ew", padx=10, pady=8)
 
-        # IP输入
         ttk.Label(right_frame, text="设备IP", font=("微软雅黑", 10)).grid(row=1, column=0, sticky="w", padx=10, pady=2)
         self.ip_entry = ttk.Entry(right_frame, font=("微软雅黑", 10), state='normal')
         self.ip_entry.grid(row=2, column=0, sticky="ew", padx=10, pady=10)
@@ -123,29 +157,35 @@ class DeviceTestApp:
         ttk.Label(right_frame, text="已添加设备（勾选测试）", font=("微软雅黑", 10))\
             .grid(row=4, column=0, sticky="w", padx=10, pady=(8, 2))
 
-        # 修复：为设备列表添加滚动条（核心改动1）
         self.list_container = ttk.Frame(right_frame)
         self.list_container.grid(row=5, column=0, sticky="nsew", padx=10, pady=4)
-        right_frame.grid_rowconfigure(5, weight=1)  # 让列表容器占满剩余高度
-        
-        # 滚动条 + Canvas 实现列表滚动
+        right_frame.grid_rowconfigure(5, weight=1)
+
         scroll_y = ttk.Scrollbar(self.list_container, orient=tk.VERTICAL)
         scroll_y.pack(side=tk.RIGHT, fill=tk.Y)
         self.list_canvas = tk.Canvas(self.list_container, yscrollcommand=scroll_y.set)
         self.list_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scroll_y.config(command=self.list_canvas.yview)
-        
+
         self.list_inner = ttk.Frame(self.list_canvas)
         self.list_canvas.create_window((0, 0), window=self.list_inner, anchor="nw")
-        # 自动更新滚动区域
         self.list_inner.bind("<Configure>", lambda e: self.list_canvas.configure(scrollregion=self.list_canvas.bbox("all")))
 
-        # 功能按钮
         self.btn_remove_devices:Button = ttk.Button(right_frame, text="删除勾选设备", command=self.delete_checked_devices)
         self.btn_remove_devices.grid(row=6, column=0, sticky="ew", padx=10, pady=3)
         self.btn_start:Button = ttk.Button(right_frame, text="开始测试（勾选设备）", command=self.start_test)
         self.btn_start.grid(row=7, column=0, sticky="ew", padx=10, pady=(6, 12))
-        
+
+    def append_log(self, content):
+        """线程安全添加日志，自动追加时间戳"""
+        def _inner():
+            self.log_text.config(state=tk.NORMAL)
+            time_str = datetime.now().strftime("%H:%M:%S")
+            self.log_text.insert(tk.END, f"[{time_str}] {content}")
+            self.log_text.see(tk.END)  # 自动滚动到底部
+            self.log_text.config(state=tk.DISABLED)
+        self.root.after(0, _inner)
+
     def refresh_port(self):
         ports = self.serial_port.get_all_com_ports()
         self.com_combo["values"] = ports
@@ -181,6 +221,7 @@ class DeviceTestApp:
 
     def beeper_test(self):
         msg_list = self.select_run_gcode('BEEPER_START H=0.2 L=0.2 C=3')
+        self.append_log(f'蜂鸣器测试完成\n')
 
     def pd_test(self):
         msg_list = self.select_run_gcode('PD_TEST')
@@ -189,6 +230,7 @@ class DeviceTestApp:
         try:
             msg_list = self.select_run_gcode('DOOR_QUERY', 10)
             line = msg_list[0]
+            self.append_log(line)
             data = {k.strip():v.strip() for k, v in re.findall(r"([\w ]+):\s*(\w+)",line)}
             str_hall_state = f''
             if data["Chassis Status"] == 'Closed': str_hall_state += '门已关  '
@@ -196,6 +238,7 @@ class DeviceTestApp:
             if data["Drawer"] == 'Closed': str_hall_state += '抽屉已关'
             else: str_hall_state += '抽屉已开'
             self.root.after(0, lambda: self.lab_door_state.config(text=str_hall_state))
+            self.append_log(f'门状态查询完成\n')
         except Exception as e:
             messagebox.showinfo(f'门状态', f'{e}')
 
@@ -203,26 +246,40 @@ class DeviceTestApp:
         try:
             msg_list = self.select_run_gcode('BLUE_TEMP_GET')
             temp_line = msg_list[0]
+            self.append_log(temp_line)
             data = list({k: float(v) for k, v in (p.split(":") for p in temp_line.split(","))}.values())
             str_blue_temp = f'T0:{data[0]} T1:{data[1]} T2:{data[2]}'
             msg_list = self.select_run_gcode('LW_TEMP_GET', 10)
             temp_line = msg_list[0]
+            self.append_log(temp_line)
             data = list({k: float(v) for k, v in (p.split(":") for p in temp_line.split(","))}.values())
             str_optical_temp = f'QCS:{data[0]} SEP:{data[1]} GALVO:{data[2]}'
-            self.root.after(0, lambda: self.lab_temp.config(text=str_blue_temp + "\n" + str_optical_temp))
+            self.root.after(0, lambda: self.lab_temp.config(text=str_blue_temp + " " + str_optical_temp))
+            self.append_log(f'温度获取完成\n')
         except Exception as e:
             messagebox.showinfo(f'获取温度失败', f'{e}')
 
     def temp_panel(self):
         msg_list = self.select_run_gcode('SET_LED R=80 G=0 B=0', 1)
-        time.sleep(0.2)
+        time.sleep(0.1)
         msg_list = self.select_run_gcode('SET_LED R=0 G=80 B=0', 1)
-        time.sleep(0.2)
+        time.sleep(0.1)
         msg_list = self.select_run_gcode('SET_LED R=0 G=0 B=80', 1)
-        time.sleep(0.2)
+        time.sleep(0.1)
+        self.append_log(f'面版灯测试完成\n')
 
     def reset_sensor_settings(self):
-        ''''''
+        msg_list = self.select_run_gcode('DOOR_SET LEVEL=job', 2)
+        self.append_log(f'{msg_list[0]}')
+        msg_list = self.select_run_gcode('PD_SET LEVEL=job S=600 C=400', 2)
+        self.append_log(f'{msg_list[0]}')
+        msg_list = self.select_run_gcode('BLUE_TEMP_SET LEVEL=always S=45 H=90 L=-10', 2)
+        self.append_log(f'{msg_list[0]}')
+        msg_list = self.select_run_gcode('SET_FIRE LEVEL=job S=0.45 C=50', 2)
+        self.append_log(f'{msg_list[0]}')
+        msg_list = self.select_run_gcode('LW_TEMP_SET LEVEL=job qcs=45 sep=45 galvo=45', 2)
+        self.append_log(f'{msg_list[0]}')
+        self.append_log(f'传感器恢复完成\n')
 
     def select_run_gcode(self, gcode, timeout=3):
         sel_ip = self.com_ips.get()
