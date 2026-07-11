@@ -103,6 +103,17 @@ class Report:
                     writer.writerow(item)
         except Exception as e:
             print('导出失败')
+
+    def save_image(self, mac, test_time, filename, image):
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        folder_name = f'reports/{mac}/{date_str}/{test_time}'
+        file_name = f'{folder_name}/{filename}'
+        print(f'save image {filename}')
+        try:
+            with open(file_name, "wb+") as f:
+                f.write(image.getvalue())
+        except Exception as e:
+            print('图片保存失败')
         
     def downfile(self, mac, ip, test_time, filename):
         # 配置账号密码

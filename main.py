@@ -1,5 +1,6 @@
 from http_client import HttpClient
 import asyncio
+from ttkthemes import ThemedTk
 import os, time, re
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, Button
@@ -9,6 +10,7 @@ from threading import Thread
 from typing import List
 from datetime import datetime
 from result_analizer import Report
+from PIL import Image, ImageTk
 from serial_port import SerialTester, WaitCompletion
 
 class DeviceTestApp:
@@ -27,103 +29,157 @@ class DeviceTestApp:
         self.create_widgets()
         self.load_machine_list()
 
+    def create_style(self):
+        style = ttk.Style(self.root)
+        style.theme_use("clam")
+        style.configure("Normal.TButton")
+        style.configure("Red.TButton", background="#ee3333")
+        style.configure("Green.TButton", background="#32CD32")
+        style.map("Red.TButton", background=[("active", "#cc2222")])
+        style.map("Green.TButton", background=[("active", "#27b827")])
+
     def create_widgets(self):
+        self.create_style()
         # 最顶层Tab容器
         main_tab = ttk.Notebook(self.root)
-        main_tab.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        main_tab.pack(fill=tk.BOTH, expand=True, padx=1, pady=1)
 
         # =========== Tab1：单机测试，放入原来左侧left_frame ===========
         tab_single = ttk.Frame(main_tab)
         main_tab.add(tab_single, text="单机测试")
-        tab_single.grid_columnconfigure(0, weight=1)
+        tab_single.grid_columnconfigure(0, weight=2)
+        tab_single.grid_columnconfigure(1, weight=1)
         tab_single.grid_rowconfigure(0, weight=1)
         tab_single.grid_rowconfigure(1, weight=2)
 
         tab1_left_frame = ttk.Frame(tab_single)
-        tab1_left_frame.grid(row=0, column=0, sticky='ewns', padx=5, pady=5)
+        tab1_left_frame.grid(row=0, column=0, sticky='ewns', padx=0, pady=0)
         tab1_left_frame.grid_columnconfigure(0, weight=1)
         tab1_left_frame.grid_columnconfigure(1, weight=2)
         tab1_left_frame.grid_rowconfigure(0, weight=1)
 
         tab1_right_frame = ttk.Frame(tab_single)
-        tab1_right_frame.grid(row=0, column=1, sticky='ewns', padx=5, pady=5)
+        tab1_right_frame.grid(row=0, column=1, sticky='ewns', padx=0, pady=0)
         tab1_right_frame.grid_columnconfigure(0, weight=1)
         tab1_right_frame.grid_rowconfigure(1, weight=1)
 
         # ----------------------新增：日志区域----------------------
         log_frame = ttk.LabelFrame(tab1_right_frame, text="运行日志")
-        log_frame.grid(row=0, column=0, sticky="nsew", padx=4, pady=4)
-        log_frame.grid_rowconfigure(0, weight=1)
+        log_frame.grid(row=0, column=0, sticky="nsew", padx=0, pady=0)
+        log_frame.grid_rowconfigure(0, weight=3)
+        log_frame.grid_rowconfigure(1, weight=1)
         log_frame.grid_columnconfigure(0, weight=1)
 
         # 垂直滚动条
         log_scroll = ttk.Scrollbar(log_frame)
-        log_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        log_scroll.grid(row=0, column=1, sticky="ns")
 
         # 文本框
         self.log_text = tk.Text(log_frame, yscrollcommand=log_scroll.set, font=("Consolas",9))
         log_scroll.config(command=self.log_text.yview)
-        self.log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.log_text.grid(row=0, column=0, sticky="nsew")
         self.log_text.config(state=tk.DISABLED) # 设置默认只读
+
+        self.image_lab = ttk.Label(log_frame, text="")
+        self.image_lab.grid(row=1, column=0, sticky="nsew", pady=2)
 # ----------------------------------------------------------
 
         # 串口区域
         serial_container = ttk.LabelFrame(tab1_left_frame, text="串口")
-        serial_container.grid(row=0, column=0, sticky='ewns', padx=5, pady=5)
+        serial_container.grid(row=0, column=0, sticky='ewns', padx=1, pady=0)
         serial_container.grid_columnconfigure(0, weight=2)
         serial_container.grid_columnconfigure(1, weight=3)
         serial_container.grid_columnconfigure(2, weight=8)
 
-        ttk.Label(serial_container, text="COM端口:").grid(row=0, column=0, sticky="w", padx=5, pady=4)
+        ttk.Label(serial_container, text="COM端口:").grid(row=0, column=0, sticky="w", padx=5, pady=0)
         self.com_combo = ttk.Combobox(serial_container, state="readonly")
-        self.com_combo.grid(row=0, column=1, sticky="ew", padx=5, pady=4)
+        self.com_combo.grid(row=0, column=1, sticky="ew", padx=5, pady=2)
 
         self.btn_fresh_port:Button = ttk.Button(serial_container, text="刷新", command=self.refresh_port)
-        self.btn_fresh_port.grid(row=1, column=0, sticky="ew", padx=10, pady=3)
+        self.btn_fresh_port.grid(row=1, column=0, sticky="ew", padx=4, pady=2)
 
         self.btn_open_serial:Button = ttk.Button(serial_container, text="打开串口", command=self.open_serial)
-        self.btn_open_serial.grid(row=1, column=1, sticky="ew", padx=10, pady=3)
+        self.btn_open_serial.grid(row=1, column=1, sticky="ew", padx=4, pady=2)
 
         self.btn_query_ip:Button = ttk.Button(serial_container, text="获取设备IP", command=self.get_ip)
-        self.btn_query_ip.grid(row=2, column=0, sticky="ew", padx=10, pady=3)
+        self.btn_query_ip.grid(row=2, column=0, sticky="ew", padx=4, pady=2)
         self.btn_add_ip_to_list:Button = ttk.Button(serial_container, text="添加到列表", command=self.add_to_list)
-        self.btn_add_ip_to_list.grid(row=2, column=1, sticky="ew", padx=10, pady=3)
+        self.btn_add_ip_to_list.grid(row=2, column=1, sticky="ew", padx=4, pady=2)
 
-        ttk.Label(serial_container, text="IP").grid(row=3, column=0, sticky="w", padx=5, pady=4)
+        ttk.Label(serial_container, text="IP").grid(row=3, column=0, sticky="w", padx=5, pady=0)
         self.lab_machine_ip = ttk.Label(serial_container, text="")
-        self.lab_machine_ip.grid(row=3, column=1, sticky="w", padx=5, pady=4)
-        ttk.Label(serial_container, text="版本").grid(row=4, column=0, sticky="w", padx=5, pady=4)
+        self.lab_machine_ip.grid(row=3, column=1, sticky="w", padx=5, pady=0)
+        ttk.Label(serial_container, text="版本").grid(row=4, column=0, sticky="w", padx=5, pady=0)
         self.lab_version = ttk.Label(serial_container, text="")
-        self.lab_version.grid(row=4, column=1, sticky="w", padx=5, pady=4)
+        self.lab_version.grid(row=4, column=1, sticky="w", padx=5, pady=0)
 
         # 传感器单项测试区域
         sensor_container = ttk.LabelFrame(tab1_left_frame, text="传感器单项测试")
         sensor_container.grid(row=1, column=0, sticky='ew', padx=5, pady=5)
         sensor_container.grid_columnconfigure(0, weight=1)
         sensor_container.grid_columnconfigure(1, weight=2)
-        sensor_container.grid_columnconfigure(2, weight=5)
+        sensor_container.grid_columnconfigure(2, weight=2)
+        sensor_container.grid_columnconfigure(3, weight=2)
 
         ttk.Label(sensor_container, text="设备:").grid(row=0, column=0, sticky="ew", padx=5, pady=4)
         self.com_ips = ttk.Combobox(sensor_container, state="readonly")
         self.com_ips.grid(row=0, column=1, sticky="ew", padx=5, pady=4)
 
-        self.btn_beeper_test:Button = ttk.Button(sensor_container, text="蜂鸣器响3声", command=self.beeper_test)
+        self.btn_beeper_test:Button = ttk.Button(sensor_container, text="蜂鸣器响3声", command=self.beeper_test, style="Normal.TButton")
         self.btn_beeper_test.grid(row=1, column=0, sticky="ew", padx=10, pady=3)
-        self.btn_pd_test:Button = ttk.Button(sensor_container, text="PD自检", command=self.pd_test)
-        self.btn_pd_test.grid(row=2, column=0, sticky="ew", padx=10, pady=(6, 12))
-        self.btn_door_test:Button = ttk.Button(sensor_container, text="门开关检测", command=self.door_test)
-        self.btn_door_test.grid(row=3, column=0, sticky="ew", padx=10, pady=(6, 12))
-        self.lab_door_state = ttk.Label(sensor_container, text="")
-        self.lab_door_state.grid(row=3, column=1, sticky="w", padx=5, pady=4)
-        self.btn_temp_test:Button = ttk.Button(sensor_container, text="温度检测", command=self.temp_test)
-        self.btn_temp_test.grid(row=5, column=0, sticky="ew", padx=10, pady=(6, 12))
+        self.btn_beeper_test_ok:Button = ttk.Button(sensor_container, text="OK", command=lambda: self.set_btn_style(self.btn_beeper_test, "Green.TButton"))
+        self.btn_beeper_test_ok.grid(row=1, column=1, sticky="ew", padx=10, pady=3)
+        self.btn_beeper_test_ng:Button = ttk.Button(sensor_container, text="NG", command=lambda: self.set_btn_style(self.btn_beeper_test, "Red.TButton"))
+        self.btn_beeper_test_ng.grid(row=1, column=2, sticky="ew", padx=10, pady=3)  
+        self.btn_led_test:Button = ttk.Button(sensor_container, text="灯条测试", command=self.led_test)
+        self.btn_led_test.grid(row=2, column=0, sticky="ew", padx=10, pady=4)
+        self.btn_led_ok:Button = ttk.Button(sensor_container, text="OK", command=lambda: self.set_btn_style(self.btn_led_test, "Green.TButton"))
+        self.btn_led_ok.grid(row=2, column=1, sticky="ew", padx=10, pady=3)
+        self.btn_led_ng:Button = ttk.Button(sensor_container, text="NG", command=lambda: self.set_btn_style(self.btn_led_test, "Red.TButton"))
+        self.btn_led_ng.grid(row=2, column=2, sticky="ew", padx=10, pady=3)
         self.btn_panelled_test:Button = ttk.Button(sensor_container, text="面版灯测试", command=self.temp_panel)
-        self.btn_panelled_test.grid(row=6, column=0, sticky="ew", padx=10, pady=(6, 12))
-        self.btn_reset_sensors_setting:Button = ttk.Button(sensor_container, text="恢复传感器设置", command=self.reset_sensor_settings)
-        self.btn_reset_sensors_setting.grid(row=7, column=0, sticky="ew", padx=10, pady=(6, 12))
+        self.btn_panelled_test.grid(row=3, column=0, sticky="ew", padx=10, pady=4)
+        self.btn_panelled_ok:Button = ttk.Button(sensor_container, text="OK", command=lambda: self.set_btn_style(self.btn_panelled_test, "Green.TButton"))
+        self.btn_panelled_ok.grid(row=3, column=1, sticky="ew", padx=10, pady=3)
+        self.btn_panelled_ng:Button = ttk.Button(sensor_container, text="NG", command=lambda: self.set_btn_style(self.btn_panelled_test, "Red.TButton"))
+        self.btn_panelled_ng.grid(row=3, column=2, sticky="ew", padx=10, pady=3)
 
-        self.lab_temp = ttk.Label(sensor_container, text="")
-        self.lab_temp.grid(row=5, column=1, sticky="ew", padx=5, pady=4)
+        self.btn_th_fan_on_test:Button = ttk.Button(sensor_container, text="风扇开", command=self.fan_on)
+        self.btn_th_fan_on_test.grid(row=4, column=0, sticky="ew", padx=10, pady=4)
+        self.btn_ok:Button = ttk.Button(sensor_container, text="OK", command=lambda: self.set_btn_style(self.btn_th_fan_on_test, "Green.TButton"))
+        self.btn_ok.grid(row=4, column=1, sticky="ew", padx=10, pady=3)
+        self.btn_ng:Button = ttk.Button(sensor_container, text="NG", command=lambda: self.set_btn_style(self.btn_th_fan_on_test, "Red.TButton"))
+        self.btn_ng.grid(row=4, column=2, sticky="ew", padx=10, pady=3)
+        self.btn_th_fan_off_test:Button = ttk.Button(sensor_container, text="风扇关", command=self.fan_off)
+        self.btn_th_fan_off_test.grid(row=5, column=0, sticky="ew", padx=10, pady=4)
+        self.btn_ok:Button = ttk.Button(sensor_container, text="OK", command=lambda: self.set_btn_style(self.btn_th_fan_off_test, "Green.TButton"))
+        self.btn_ok.grid(row=5, column=1, sticky="ew", padx=10, pady=3)
+        self.btn_ng:Button = ttk.Button(sensor_container, text="NG", command=lambda: self.set_btn_style(self.btn_th_fan_off_test, "Red.TButton"))
+        self.btn_ng.grid(row=5, column=2, sticky="ew", padx=10, pady=3)
+
+        self.btn_door_open_test:Button = ttk.Button(sensor_container, text="门抽屉开检测", command=self.door_open_test)
+        self.btn_door_open_test.grid(row=6, column=0, sticky="ew", padx=10, pady=3)
+        self.btn_door_close_test:Button = ttk.Button(sensor_container, text="门抽屉关检测", command=self.door_close_test)
+        self.btn_door_close_test.grid(row=6, column=1, sticky="ew", padx=10, pady=3)
+
+        self.btn_pump_calibrate:Button = ttk.Button(sensor_container, text="气压传感校准", command=self.pump_calibrate)
+        self.btn_pump_calibrate.grid(row=7, column=0, sticky="ew", padx=10, pady=4)
+        self.btn_pump_test:Button = ttk.Button(sensor_container, text="气压传感器测试", command=self.pump_test)
+        self.btn_pump_test.grid(row=7, column=1, sticky="ew", padx=10, pady=4)
+
+        self.btn_pd_test:Button = ttk.Button(sensor_container, text="PD自检", command=self.pd_test)
+        self.btn_pd_test.grid(row=8, column=0, sticky="ew", padx=10, pady=4)
+        self.btn_temp_test:Button = ttk.Button(sensor_container, text="温度检测", command=self.temp_test)
+        self.btn_temp_test.grid(row=8, column=1, sticky="ew", padx=10, pady=4)
+        self.btn_ukey_test:Button = ttk.Button(sensor_container, text="USB Key", command=self.usb_key_test)
+        self.btn_ukey_test.grid(row=8, column=2, sticky="ew", padx=10, pady=4)
+        
+        self.btn_th_cam_test:Button = ttk.Button(sensor_container, text="近端摄像头", command=self.th_cam_test)
+        self.btn_th_cam_test.grid(row=9, column=1, sticky="ew", padx=10, pady=4)
+        self.btn_global_cam_test:Button = ttk.Button(sensor_container, text="远端摄像头", command=self.global_cam_test)
+        self.btn_global_cam_test.grid(row=9, column=2, sticky="ew", padx=10, pady=4)
+        self.btn_reset_sensors_setting:Button = ttk.Button(sensor_container, text="恢复传感器设置", command=self.reset_sensor_settings)
+        self.btn_reset_sensors_setting.grid(row=9, column=0, sticky="ew", padx=10, pady=4)
 
         # =========== Tab2：性能测试：中间区域+右侧区域做水平分栏 ===========
         tab_perf = ttk.Frame(main_tab)
@@ -226,19 +282,34 @@ class DeviceTestApp:
     def pd_test(self):
         msg_list = self.select_run_gcode('PD_TEST')
 
+    def door_open_test(self):
+        state = self.door_test()
+        if state == [1, 1]:
+            self.set_btn_style(self.btn_door_open_test, "Green.TButton")
+        else:
+            self.set_btn_style(self.btn_door_open_test, "Red.TButton")
+        self.append_log(f'门抽屉开状态查询完成\n')
+
+    def door_close_test(self):
+        state = self.door_test()
+        if state == [0, 0]:
+            self.set_btn_style(self.btn_door_close_test, "Green.TButton")
+        else:
+            self.set_btn_style(self.btn_door_close_test, "Red.TButton")
+        self.append_log(f'门抽屉关状态查询完成\n')
+
     def door_test(self):
         try:
             msg_list = self.select_run_gcode('DOOR_QUERY', 10)
             line = msg_list[0]
             self.append_log(line)
             data = {k.strip():v.strip() for k, v in re.findall(r"([\w ]+):\s*(\w+)",line)}
-            str_hall_state = f''
-            if data["Chassis Status"] == 'Closed': str_hall_state += '门已关  '
-            else: str_hall_state += '门已开  '
-            if data["Drawer"] == 'Closed': str_hall_state += '抽屉已关'
-            else: str_hall_state += '抽屉已开'
-            self.root.after(0, lambda: self.lab_door_state.config(text=str_hall_state))
-            self.append_log(f'门状态查询完成\n')
+            hall_state = []
+            if data["Chassis Status"] == 'Closed': hall_state.append(0)
+            else: hall_state.append(1)
+            if data["Drawer"] == 'Closed': hall_state.append(0)
+            else: hall_state.append(1)
+            return hall_state
         except Exception as e:
             messagebox.showinfo(f'门状态', f'{e}')
 
@@ -246,18 +317,37 @@ class DeviceTestApp:
         try:
             msg_list = self.select_run_gcode('BLUE_TEMP_GET')
             temp_line = msg_list[0]
+            fault = False
             self.append_log(temp_line)
             data = list({k: float(v) for k, v in (p.split(":") for p in temp_line.split(","))}.values())
+            temp = []
+            temp.extend(data)
             str_blue_temp = f'T0:{data[0]} T1:{data[1]} T2:{data[2]}'
             msg_list = self.select_run_gcode('LW_TEMP_GET', 10)
             temp_line = msg_list[0]
             self.append_log(temp_line)
             data = list({k: float(v) for k, v in (p.split(":") for p in temp_line.split(","))}.values())
+            temp.extend(data)
+            for t in temp:
+                if t<5 or t>45:
+                    fault = True
+            if fault == True:
+                self.set_btn_style(self.btn_temp_test, "Red.TButton")
+            else:
+                self.set_btn_style(self.btn_temp_test, "Green.TButton")
             str_optical_temp = f'QCS:{data[0]} SEP:{data[1]} GALVO:{data[2]}'
-            self.root.after(0, lambda: self.lab_temp.config(text=str_blue_temp + " " + str_optical_temp))
+            # self.root.after(0, lambda: self.lab_temp.config(text=str_blue_temp + " " + str_optical_temp))
             self.append_log(f'温度获取完成\n')
         except Exception as e:
             messagebox.showinfo(f'获取温度失败', f'{e}')
+
+    def usb_key_test(self):
+        msg_list = self.select_run_gcode('QUERY_ACCESS_KEY')
+        temp_line = msg_list[0]
+        if temp_line == 'Access key: detected':
+            self.set_btn_style(self.btn_ukey_test, "Green.TButton")
+        else:
+            self.set_btn_style(self.btn_ukey_test, "Red.TButton")
 
     def temp_panel(self):
         msg_list = self.select_run_gcode('SET_LED R=80 G=0 B=0', 1)
@@ -267,6 +357,75 @@ class DeviceTestApp:
         msg_list = self.select_run_gcode('SET_LED R=0 G=0 B=80', 1)
         time.sleep(0.1)
         self.append_log(f'面版灯测试完成\n')
+
+    def fan_on(self):
+        msg_list = self.select_run_gcode('SET_PIN PIN=th_fan VALUE=1', 1)
+        msg_list = self.select_run_gcode('SET_PIN PIN=qcs_fan VALUE=1', 1)
+        msg_list = self.select_run_gcode('SET_PIN PIN=shield_fan VALUE=1', 1)
+        msg_list = self.select_run_gcode('SET_PIN PIN=shield_fan_pwm VALUE=1', 1)
+        self.append_log(f'风扇开\n')
+
+    def fan_off(self):
+        msg_list = self.select_run_gcode('SET_PIN PIN=th_fan VALUE=0', 1)
+        msg_list = self.select_run_gcode('SET_PIN PIN=qcs_fan VALUE=0', 1)
+        msg_list = self.select_run_gcode('SET_PIN PIN=shield_fan VALUE=0', 1)
+        msg_list = self.select_run_gcode('SET_PIN PIN=shield_fan_pwm VALUE=0', 1)
+        self.append_log(f'风扇关\n')
+
+    def led_test(self):
+        for i in range(2):
+            msg_list = self.select_run_gcode('SET_PIN PIN=shield_led VALUE=1', 1)
+            msg_list = self.select_run_gcode('SET_PIN PIN=logo_led VALUE=1', 1)
+            time.sleep(0.3)
+            msg_list = self.select_run_gcode('SET_PIN PIN=shield_led VALUE=0', 1)
+            msg_list = self.select_run_gcode('SET_PIN PIN=logo_led VALUE=0', 1)
+            time.sleep(0.3)
+        self.append_log(f'灯条开\n')
+
+    def th_cam_test(self):
+        ''''''
+        res = self.select_camera_capture('th')
+        if res is None:
+            self.append_log(f'近端摄像头，抓拍失败\n')
+        else:
+            self.append_log(f'近端摄像头，抓拍成功\n')
+            image = Image.open(res)
+            image = image.resize((400,300))
+            self.img_tk = ImageTk.PhotoImage(image)
+            self.root.after(0, lambda: self.image_lab.config(image=self.img_tk))
+
+    def global_cam_test(self):
+        ''''''
+        res = self.select_camera_capture('global')
+        if res is None:
+            self.append_log(f'远端摄像头，抓拍失败\n')
+        else:
+            self.append_log(f'远端摄像头，抓拍成功\n')
+            image = Image.open(res)
+            image = image.resize((400,300))
+            self.img_tk = ImageTk.PhotoImage(image)
+            self.root.after(0, lambda: self.image_lab.config(image=self.img_tk))
+    
+    def pump_calibrate(self):
+        msg_list = self.select_run_gcode('PUMP_PRESSURE_CALIBRATE', 2)
+        self.append_log(f'{msg_list[0]}')
+        self.append_log(f'气压传感器校准完成\n')
+
+    def pump_test(self):
+        try:
+            msg_list = self.select_run_gcode('PUMP_PRESSURE_QUERY', 2)
+            data_line = msg_list[0].strip().split('\n')
+            data = []
+            for l in data_line:
+                data.append(float(l.split(':')[1].strip()))
+            if data[0] - data[1] > 0.015:
+                self.set_btn_style(self.btn_pump_test, "Green.TButton")
+            else:
+                self.set_btn_style(self.btn_pump_test, "Red.TButton")
+            self.append_log(f'{msg_list[0]}')
+            self.append_log(f'气压传感器测试完成\n')
+        except Exception as e:
+            messagebox.showerror("气压传感器测试失败", f"{e}")
 
     def reset_sensor_settings(self):
         msg_list = self.select_run_gcode('DOOR_SET LEVEL=job', 2)
@@ -292,7 +451,6 @@ class DeviceTestApp:
             )
         thread.start()
         res = wait_completion.wait(timeout)
-        print(f'wait:{res}')
         return res
     
     def run_gcode_thread(self, sel_device, wait_comp, gcode: str, timeout=3):
@@ -300,6 +458,31 @@ class DeviceTestApp:
             gcode_event_loop = asyncio.new_event_loop()
             asyncio.set_event_loop(gcode_event_loop)
             res = gcode_event_loop.run_until_complete(sel_device.get('client').run_gcode(gcode, timeout))
+            wait_comp.complete(res)
+        except Exception as e:
+            print(f"{e}")
+            wait_comp.complete(None)
+        finally:
+            gcode_event_loop.close()
+
+    def select_camera_capture(self, camera_name, timeout=5):
+        sel_ip = self.com_ips.get()
+        sel_device = self.devices.get(sel_ip)
+        wait_completion = WaitCompletion()
+        thread = Thread(
+            target=self.camera_capture_thread,
+            args=(sel_device, wait_completion, camera_name),
+            daemon=True
+            )
+        thread.start()
+        res = wait_completion.wait(timeout)
+        return res
+    
+    def camera_capture_thread(self, sel_device, wait_comp, camera_name):
+        try:
+            gcode_event_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(gcode_event_loop)
+            res = gcode_event_loop.run_until_complete(sel_device.get('client').get_cv_image(camera_name))
             wait_comp.complete(res)
         except Exception as e:
             print(f"{e}")
@@ -377,13 +560,27 @@ class DeviceTestApp:
         item_gcode = item_list.get('gcode').split(' ')[0]
         item_name = item_list.get('测试项')
         logs = dev['client'].get_ws_messages()
-        if logs and item_gcode != 'SYS_MODE':
+
+        if item_gcode == 'CAMERAS_TEST':
+            report = Report()
+            mac = dev['client'].mac
+            try:
+                th_image_data = result[3][0]
+                global_image_data = result[3][1]
+                report.save_image(mac, dev['test_time'], 'th.png', th_image_data)
+                report.save_image(mac, dev['test_time'], 'global.png', global_image_data)
+            except Exception as e:
+                print(f'图片无效:{e}')
+                
+        elif logs and item_gcode != 'SYS_MODE':
             report = Report()
             mac = dev['client'].mac
             if item_gcode == 'TEST_RESONANCES':
                 report.downfile(mac, ip, dev['test_time'], 'resonances_x_.csv')
                 report.downfile(mac, ip, dev['test_time'], 'resonances_y_.csv')
             report.save_log(mac, item_name, dev['test_time'], logs)
+        
+        
 
         if test_pass == 'Manual':
             res = messagebox.askyesno(f"{ip}", "请确认是否继续")
@@ -437,6 +634,17 @@ class DeviceTestApp:
         else:
             tree.tag_configure("fail", background="#FFB6C1")  # 浅红
             tree.item(item_id, tags=("fail",))
+    
+    def set_btn_style(self, btn: ttk.Button, style_name: str):
+        self.root.after(0, lambda: btn.config(style=style_name))
+
+    def _update_tree_color(self, tree, row_index, color):
+        def inner():
+            item_id = tree.get_children("")[row_index]
+            tag_name = f"row_{row_index}"
+            tree.tag_configure(tag_name, background=color)
+            tree.item(item_id, tags=(tag_name,))
+        self.root.after(0, inner)
 
     def set_buttons_state(self, buttons:List[Button], new_state:str):
         for btn in buttons:
@@ -457,6 +665,13 @@ class DeviceTestApp:
         thread.start()
         self.set_buttons_state([self.btn_add_device, self.btn_remove_devices, self.btn_start, self.btn_select_csv], 'disabled')
     
+    def befor_test(self, ip, index):
+        dev = self.devices.get(ip)
+        if not dev:
+            return
+        tree = dev['tree']
+        self.root.after(0, self._update_tree_color, tree, index, "#778487")
+    
     def run_async_loop(self, ip_list):
         # 在线程中设置并运行新的事件循环
         loop = asyncio.new_event_loop()
@@ -464,7 +679,7 @@ class DeviceTestApp:
         for dev in self.devices.values():
             dev['test_time'] = datetime.now().strftime("%H-%M-%S")
             dev['test_result'] = []
-        tasks = [self.devices[ip].get('client').test(self.test_template, self.test_complete_callback, self.on_websocket_closed) for ip in ip_list]
+        tasks = [self.devices[ip].get('client').test(self.test_template, self.test_complete_callback, self.on_websocket_closed, self.befor_test) for ip in ip_list]
 
         try:
             # 运行具体的协程

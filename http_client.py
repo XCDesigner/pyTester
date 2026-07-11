@@ -6,6 +6,8 @@ import websockets
 from result_analizer import TemplateParser
 from websockets.exceptions import ConnectionClosed
 import aiohttp
+import cv2
+import numpy as np
 
 class HttpClient:
     def __init__(self, ip):
@@ -23,7 +25,10 @@ class HttpClient:
             'TEST_XY_RANGE': self.tst_xy_range,
             'ENCODER_TEST': self.encoder_test,
             'TEST_XY_SPEED': self.test_xy_speed,
-            'TEST_XY_SPEED_HYBRID': self.test_xy_speed_hybrid
+            'TEST_XY_SPEED_HYBRID': self.test_xy_speed_hybrid,
+            'PD_TEST': self.pd_test,
+            'TEMPS_TEST': self.temp_test,
+            'CAMERAS_TEST': self.camera_test, 
         }
         self.mac = 'Unknow'
         self.ws: Optional[websockets.WebSocketClientProtocol] = None
@@ -137,14 +142,14 @@ class HttpClient:
         self.ws_connected = False
 
     def on_ws_message(self, data:dict):
-        """收到设备WS消息回调，自行扩展业务"""
         if data.get('method') == 'push.gcode_response':
             new_msg = data.get('params')[0]
             print(f"[{self.ip}] WS收到数据: {new_msg}")
             self.ws_msg_list.append(new_msg)
             if self.msg_in_waiting:
-                if self.msg_in_waiting in new_msg:
-                    self.wait_result = new_msg
+                for msg in self.ws_msg_list[-5:]:
+                    if self.msg_in_waiting in msg:
+                        self.wait_result = msg
 
     async def wait_ws_message(self, msg_to_wait:str, timeout):
         self.msg_in_waiting = msg_to_wait
@@ -169,6 +174,23 @@ class HttpClient:
     def clear_ws_messages(self):
         """清空WS消息缓存"""
         self.ws_msg_list.clear()
+
+    async def get_cv_image(self, camera_name):
+        url = f"http://{self.ip}/api/module/camera/snapshot?name={camera_name}"
+        print(url)
+        timeout = aiohttp.ClientTimeout(total=10)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            try:
+                async with session.get(url) as resp:
+                    if resp.status != 200:
+                        return None
+                    img_bytes = await resp.read()
+                    from io import BytesIO
+                    image = BytesIO(img_bytes)
+                return image
+            except Exception as e:
+                print("获取图片失败", e)
+                return None
 
     async def send_gcode_safe(self, gcode: str, timeout: int = 30):
         """纯异步HTTP，不阻塞事件循环，替代原requests"""
@@ -200,7 +222,7 @@ class HttpClient:
     
     async def sys_mode(self, index, gcode:str, test_item):
         await self.send_gcode_safe(gcode, 300)
-        await asyncio.sleep(5)
+        # await asyncio.sleep(8)
         # retry = 20
         # result = False
         # while retry :
@@ -208,15 +230,17 @@ class HttpClient:
         #         result = True
         #         break
         #     retry = retry - 1
-        result = await self.wait_ws_message('Machine is ready for operation.', 50)
-        await asyncio.sleep(5)
+        result = await self.wait_ws_message('Machine is ready for operation.', 30)
+        await asyncio.sleep(1)
         return [index, result, 'ok']
 
     async def wifi_info(self, index, gcode:str, test_item):
-        await self.send_gcode_safe('SET_PIN PIN=th_fan value=0', 10)
-        await self.send_gcode_safe('SET_PIN PIN=qcs_fan value=0', 10)
+        # await self.send_gcode_safe('SET_PIN PIN=th_fan value=0', 10)
+        # await asyncio.sleep(0.1)
+        # await self.send_gcode_safe('SET_PIN PIN=qcs_fan value=0', 10)
+        # await asyncio.sleep(0.1)
         await self.send_gcode_safe(gcode, 10)
-        result = await self.wait_ws_message('SSID', 20)
+        result = await self.wait_ws_message('SSID', 15)
         if result:
             mac_pos = result.find('MAC:')
             if mac_pos > 0:
@@ -379,6 +403,50 @@ class HttpClient:
         #     print(f'Test speed error: {e}')
         # return [index, result, f'Acc:{accel} Speed:{speed}']
         return [index, 'Manual', 'ok']
+    
+    async def pd_test(self, index, gcode:str, test_item):
+        ''''''
+
+    async def temp_test(self, index, gcode:str, test_item):
+        ''''''
+        await self.send_gcode_safe('BLUE_TEMP_GET', 5 * 60)
+        await asyncio.sleep(0.2)
+        temp_line = self.ws_msg_list[0]
+        fault = True
+        data = list({k: float(v) for k, v in (p.split(":") for p in temp_line.split(","))}.values())
+        temp = []
+        temp.extend(data)
+        await self.send_gcode_safe('LW_TEMP_GET', 10)
+        await asyncio.sleep(0.2)
+        temp_line = self.ws_msg_list[1]
+        data = list({k: float(v) for k, v in (p.split(":") for p in temp_line.split(","))}.values())
+        temp.extend(data)
+        print(temp)
+        str_temp = f'T0:{temp[1]:0.1f} T1:{temp[2]:0.1f} T2:{temp[3]:0.1f} QCS:{temp[4]:0.1f} 隔离器:{temp[5]:0.1f} 振镜外壳:{temp[6]:0.1f}'
+        
+        for t in temp:
+            if t<5 or t>35:
+                result = False
+                break
+        return [index, result, str_temp]
+
+    async def camera_test(self, index, gcode:str, test_item):
+        result = True
+        res_th = await self.get_cv_image('th')
+        if res_th is None:
+            result = False
+            print(f'近端摄像头，抓拍失败\n')
+        else:
+            result = True
+            print(f'近端摄像头，抓拍成功\n')
+        res_global = await self.get_cv_image('global')
+        if res_global is None:
+            result = False
+            print(f'远端摄像头，抓拍失败\n')
+        else:
+            result = True
+            print(f'远端摄像头，抓拍成功\n')
+        return [index, result, '', [res_th, res_global]]
 
     async def dummy_test(self, index, gcode:str, test_item):
         print(f'{self.ip}: dummy_test')
@@ -399,7 +467,7 @@ class HttpClient:
         await self._http_session.close()
         return res_msg
 
-    async def test(self, test_items:Dict[str, Dict[str, str]], callback, error_callback):
+    async def test(self, test_items:Dict[str, Dict[str, str]], callback, error_callback, start_callback):
         self.error_handler = error_callback
         for i, test in enumerate(test_items.values()):
             await asyncio.sleep(0.3)
@@ -414,6 +482,10 @@ class HttpClient:
                 print(f'测试项:{i}: {gcode_cmd}')
                 if gcode_cmd in self.test_handle:
                     func = self.test_handle.get(gcode_cmd)
+                else:
+                    print(f'测试项不支持{i}: {gcode_cmd}')
+                    continue
+            start_callback(self.ip, i)
             result = await func(i, gcode, test)
             if callback(self.ip, result) == False:
                 await self.ws_disconnect()
