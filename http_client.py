@@ -29,6 +29,7 @@ class HttpClient:
             'PD_TEST': self.pd_test,
             'TEMPS_TEST': self.temp_test,
             'CAMERAS_TEST': self.camera_test, 
+            'UKEY_TEST': self.ukey_test,
         }
         self.mac = 'Unknow'
         self.ws: Optional[websockets.WebSocketClientProtocol] = None
@@ -447,6 +448,15 @@ class HttpClient:
             result = True
             print(f'远端摄像头，抓拍成功\n')
         return [index, result, '', [res_th, res_global]]
+    
+    async def ukey_test(self, index, gcode: str, test_item):
+        await self.send_gcode_safe('QUERY_ACCESS_KEY', 5 * 60)
+        await asyncio.sleep(0.2)
+        temp_line = self.ws_msg_list[0]
+        if temp_line == 'Access key: detected':
+            return [index, True, temp_line]
+        else:
+            return [index, False, temp_line]
 
     async def dummy_test(self, index, gcode:str, test_item):
         print(f'{self.ip}: dummy_test')

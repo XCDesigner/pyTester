@@ -107,7 +107,7 @@ class DeviceTestApp:
         self.btn_add_ip_to_list.grid(row=2, column=1, sticky="ew", padx=4, pady=2)
 
         ttk.Label(serial_container, text="IP").grid(row=3, column=0, sticky="w", padx=5, pady=0)
-        self.lab_machine_ip = ttk.Label(serial_container, text="")
+        self.lab_machine_ip = ttk.Entry(serial_container, font=("微软雅黑", 10), state='normal')
         self.lab_machine_ip.grid(row=3, column=1, sticky="w", padx=5, pady=0)
         ttk.Label(serial_container, text="版本").grid(row=4, column=0, sticky="w", padx=5, pady=0)
         self.lab_version = ttk.Label(serial_container, text="")
@@ -268,10 +268,11 @@ class DeviceTestApp:
     
     def get_ip(self):
         ip = self.serial_port.run_command(command='WIFI_INFO')
-        self.root.after(0, lambda: self.lab_machine_ip.config(text=ip))
+        self.lab_machine_ip.delete(0, tk.END)
+        self.lab_machine_ip.insert(0, ip)
 
     def add_to_list(self):
-        ip = self.lab_machine_ip['text']
+        ip = self.lab_machine_ip.get().strip()
         self.add_device_by_ip(ip)
         self.root.after(0, self.refresh_device_list, self.list_inner, self.list_canvas)
 
@@ -288,7 +289,7 @@ class DeviceTestApp:
             self.set_btn_style(self.btn_door_open_test, "Green.TButton")
         else:
             self.set_btn_style(self.btn_door_open_test, "Red.TButton")
-        self.append_log(f'门抽屉开状态查询完成\n')
+        self.append_log(f'门抽屉开检测完成\n')
 
     def door_close_test(self):
         state = self.door_test()
@@ -296,11 +297,11 @@ class DeviceTestApp:
             self.set_btn_style(self.btn_door_close_test, "Green.TButton")
         else:
             self.set_btn_style(self.btn_door_close_test, "Red.TButton")
-        self.append_log(f'门抽屉关状态查询完成\n')
+        self.append_log(f'门抽屉关检测完成\n')
 
     def door_test(self):
         try:
-            msg_list = self.select_run_gcode('DOOR_QUERY', 10)
+            msg_list = self.select_run_gcode('DOOR_QUERY')
             line = msg_list[0]
             self.append_log(line)
             data = {k.strip():v.strip() for k, v in re.findall(r"([\w ]+):\s*(\w+)",line)}
@@ -311,7 +312,7 @@ class DeviceTestApp:
             else: hall_state.append(1)
             return hall_state
         except Exception as e:
-            messagebox.showinfo(f'门状态', f'{e}')
+            messagebox.showinfo(f'门抽屉检测', f'{e}')
 
     def temp_test(self):
         try:
@@ -356,6 +357,7 @@ class DeviceTestApp:
         time.sleep(0.1)
         msg_list = self.select_run_gcode('SET_LED R=0 G=0 B=80', 1)
         time.sleep(0.1)
+        msg_list = self.select_run_gcode('SET_LED R=0 G=80 B=0', 1)
         self.append_log(f'面版灯测试完成\n')
 
     def fan_on(self):
@@ -380,7 +382,9 @@ class DeviceTestApp:
             msg_list = self.select_run_gcode('SET_PIN PIN=shield_led VALUE=0', 1)
             msg_list = self.select_run_gcode('SET_PIN PIN=logo_led VALUE=0', 1)
             time.sleep(0.3)
-        self.append_log(f'灯条开\n')
+        msg_list = self.select_run_gcode('SET_PIN PIN=shield_led VALUE=1', 1)
+        msg_list = self.select_run_gcode('SET_PIN PIN=logo_led VALUE=1', 1)
+        self.append_log(f'灯条测试结束\n')
 
     def th_cam_test(self):
         ''''''
@@ -441,16 +445,20 @@ class DeviceTestApp:
         self.append_log(f'传感器恢复完成\n')
 
     def select_run_gcode(self, gcode, timeout=3):
-        sel_ip = self.com_ips.get()
-        sel_device = self.devices.get(sel_ip)
-        wait_completion = WaitCompletion()
-        thread = Thread(
-            target=self.run_gcode_thread,
-            args=(sel_device, wait_completion, gcode, timeout),
-            daemon=True
-            )
-        thread.start()
-        res = wait_completion.wait(timeout)
+        try:
+            sel_ip = self.com_ips.get()
+            sel_device = self.devices.get(sel_ip)
+            wait_completion = WaitCompletion()
+            thread = Thread(
+                target=self.run_gcode_thread,
+                args=(sel_device, wait_completion, gcode, timeout),
+                daemon=True
+                )
+            thread.start()
+            res = wait_completion.wait(timeout)
+        except Exception as e:
+            print(f'Run gcode {gcode} fail: {e}')
+            res = None
         return res
     
     def run_gcode_thread(self, sel_device, wait_comp, gcode: str, timeout=3):
