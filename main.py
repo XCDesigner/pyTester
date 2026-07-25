@@ -109,9 +109,16 @@ class DeviceTestApp:
         ttk.Label(serial_container, text="IP").grid(row=3, column=0, sticky="w", padx=5, pady=0)
         self.lab_machine_ip = ttk.Entry(serial_container, font=("微软雅黑", 10), state='normal')
         self.lab_machine_ip.grid(row=3, column=1, sticky="w", padx=5, pady=0)
-        ttk.Label(serial_container, text="版本").grid(row=4, column=0, sticky="w", padx=5, pady=0)
+        ttk.Label(serial_container, text="版本").grid(row=3, column=2, sticky="w", padx=5, pady=0)
         self.lab_version = ttk.Label(serial_container, text="")
-        self.lab_version.grid(row=4, column=1, sticky="w", padx=5, pady=0)
+        self.lab_version.grid(row=3, column=3, sticky="w", padx=5, pady=0)
+        ttk.Label(serial_container, text="路由信息").grid(row=4, column=0, sticky="w", padx=5, pady=0)
+        self.lab_ssid = ttk.Entry(serial_container, font=("微软雅黑", 10), state='normal')
+        self.lab_ssid.grid(row=4, column=1, sticky="w", padx=5, pady=0)
+        self.lab_pwd = ttk.Entry(serial_container, font=("微软雅黑", 10), state='normal')
+        self.lab_pwd.grid(row=4, column=2, sticky="w", padx=5, pady=0)
+        self.btn_connect_wifi:Button = ttk.Button(serial_container, text="设置WIFI", command=self.connect_wifi)
+        self.btn_connect_wifi.grid(row=4, column=3, sticky="ew", padx=4, pady=2)
 
         # 传感器单项测试区域
         sensor_container = ttk.LabelFrame(tab1_left_frame, text="传感器单项测试")
@@ -203,13 +210,6 @@ class DeviceTestApp:
         self.btn_select_csv:Button =ttk.Button(right_frame, text="选择测试项CSV文件", command=self.select_csv_file)
         self.btn_select_csv.grid(row=0, column=0, sticky="ew", padx=10, pady=8)
 
-        ttk.Label(right_frame, text="设备IP", font=("微软雅黑", 10)).grid(row=1, column=0, sticky="w", padx=10, pady=2)
-        self.ip_entry = ttk.Entry(right_frame, font=("微软雅黑", 10), state='normal')
-        self.ip_entry.grid(row=2, column=0, sticky="ew", padx=10, pady=10)
-        self.ip_entry.insert(0, "127.0.0.1")
-
-        self.btn_add_device:Button = ttk.Button(right_frame, text="添加设备", command=self.add_device)
-        self.btn_add_device.grid(row=3, column=0, sticky="ew", padx=10, pady=6)
         ttk.Label(right_frame, text="已添加设备（勾选测试）", font=("微软雅黑", 10))\
             .grid(row=4, column=0, sticky="w", padx=10, pady=(8, 2))
 
@@ -245,6 +245,7 @@ class DeviceTestApp:
     def refresh_port(self):
         ports = self.serial_port.get_all_com_ports()
         self.com_combo["values"] = ports
+        self.com_combo.set('')
         if ports:
             self.com_combo.current(0)
         
@@ -263,23 +264,44 @@ class DeviceTestApp:
             if ret:
                 self.btn_open_serial.config(text="关闭串口")
                 messagebox.showinfo("串口", f"{selected_com} 打开成功")
+                self.serial_port.disconnect_callback = self.open_serial_disconnect_cb
             else:
                 messagebox.showerror("串口", "打开失败，请检查端口占用")
     
+    def open_serial_disconnect_cb(self):
+        self.btn_open_serial.config(text="打开串口")
+        self.refresh_port()
+    
+    def connect_wifi(self):
+        ssid = self.lab_ssid.get().strip()
+        pwd = self.lab_pwd.get().strip()
+        if self.serial_port.run_command(command='WIFI_CONNECT', ssid=ssid, password=pwd):
+            self.append_log(f'WIFI设置成功\n')
+        else:
+            self.append_log(f'WIFI设置失败\n')
+
     def get_ip(self):
         ip = self.serial_port.run_command(command='WIFI_INFO')
+        print(ip)
         self.lab_machine_ip.delete(0, tk.END)
         self.lab_machine_ip.insert(0, ip)
+        version = self.serial_port.run_command(command='$I')
+        print(version)
+        self.lab_version.config(text=version)
 
     def add_to_list(self):
         ip = self.lab_machine_ip.get().strip()
-        self.add_device_by_ip(ip)
-        self.root.after(0, self.refresh_device_list, self.list_inner, self.list_canvas)
+        if self.add_device_by_ip(ip):
+            self.root.after(0, self.refresh_device_list, self.list_inner, self.list_canvas)
+        self.refresh_device_test_items(ip)
 
     def beeper_test(self):
         msg_list = self.select_run_gcode('BEEPER_START H=0.2 L=0.2 C=3')
-        self.append_log(f'蜂鸣器测试完成\n')
-
+        if msg_list is None:
+            self.append_log(f'蜂鸣器测试失败\n')
+        else:
+            self.append_log(f'蜂鸣器测试结束\n')
+            
     def pd_test(self):
         msg_list = self.select_run_gcode('PD_TEST')
 
@@ -289,7 +311,7 @@ class DeviceTestApp:
             self.set_btn_style(self.btn_door_open_test, "Green.TButton")
         else:
             self.set_btn_style(self.btn_door_open_test, "Red.TButton")
-        self.append_log(f'门抽屉开检测完成\n')
+        self.append_log(f'门抽屉开检测结束\n')
 
     def door_close_test(self):
         state = self.door_test()
@@ -297,7 +319,7 @@ class DeviceTestApp:
             self.set_btn_style(self.btn_door_close_test, "Green.TButton")
         else:
             self.set_btn_style(self.btn_door_close_test, "Red.TButton")
-        self.append_log(f'门抽屉关检测完成\n')
+        self.append_log(f'门抽屉关检测结束\n')
 
     def door_test(self):
         try:
@@ -338,52 +360,64 @@ class DeviceTestApp:
                 self.set_btn_style(self.btn_temp_test, "Green.TButton")
             str_optical_temp = f'QCS:{data[0]} SEP:{data[1]} GALVO:{data[2]}'
             # self.root.after(0, lambda: self.lab_temp.config(text=str_blue_temp + " " + str_optical_temp))
-            self.append_log(f'温度获取完成\n')
+            self.append_log(f'温度获取结束\n')
         except Exception as e:
             messagebox.showinfo(f'获取温度失败', f'{e}')
 
     def usb_key_test(self):
         msg_list = self.select_run_gcode('QUERY_ACCESS_KEY')
         temp_line = msg_list[0]
-        if temp_line == 'Access key: detected':
+        if 'Access key: detected' in temp_line:
             self.set_btn_style(self.btn_ukey_test, "Green.TButton")
         else:
             self.set_btn_style(self.btn_ukey_test, "Red.TButton")
+        self.append_log(f'UKey测试结束\n')
 
     def temp_panel(self):
-        msg_list = self.select_run_gcode('SET_LED R=80 G=0 B=0', 1)
-        time.sleep(0.1)
-        msg_list = self.select_run_gcode('SET_LED R=0 G=80 B=0', 1)
-        time.sleep(0.1)
-        msg_list = self.select_run_gcode('SET_LED R=0 G=0 B=80', 1)
-        time.sleep(0.1)
-        msg_list = self.select_run_gcode('SET_LED R=0 G=80 B=0', 1)
-        self.append_log(f'面版灯测试完成\n')
+        msg_log = f'面版灯测试失败\n'
+        while True:
+            if self.select_run_gcode('SET_LED R=80 G=0 B=0', 3) is None:
+                break
+            time.sleep(0.1)
+            self.select_run_gcode('SET_LED R=0 G=80 B=0', 3)
+            time.sleep(0.1)
+            self.select_run_gcode('SET_LED R=0 G=0 B=80', 3)
+            time.sleep(0.1)
+            self.select_run_gcode('SET_LED R=0 G=80 B=0', 3)
+            msg_log = f'面版灯测试结束\n'
+            break
+        self.append_log(msg_log)
 
     def fan_on(self):
-        msg_list = self.select_run_gcode('SET_PIN PIN=th_fan VALUE=1', 1)
-        msg_list = self.select_run_gcode('SET_PIN PIN=qcs_fan VALUE=1', 1)
-        msg_list = self.select_run_gcode('SET_PIN PIN=shield_fan VALUE=1', 1)
-        msg_list = self.select_run_gcode('SET_PIN PIN=shield_fan_pwm VALUE=1', 1)
-        self.append_log(f'风扇开\n')
+        if self.select_run_gcode('SET_PIN PIN=th_fan VALUE=1', 3) is None:
+            self.append_log(f'风扇打开失败')
+            return
+        self.select_run_gcode('SET_PIN PIN=qcs_fan VALUE=1', 3)
+        self.select_run_gcode('SET_PIN PIN=shield_fan VALUE=1', 3)
+        self.select_run_gcode('SET_PIN PIN=shield_fan_pwm VALUE=1', 3)
+        self.append_log(f'风扇已打开\n')
 
     def fan_off(self):
-        msg_list = self.select_run_gcode('SET_PIN PIN=th_fan VALUE=0', 1)
-        msg_list = self.select_run_gcode('SET_PIN PIN=qcs_fan VALUE=0', 1)
-        msg_list = self.select_run_gcode('SET_PIN PIN=shield_fan VALUE=0', 1)
-        msg_list = self.select_run_gcode('SET_PIN PIN=shield_fan_pwm VALUE=0', 1)
-        self.append_log(f'风扇关\n')
+        if self.select_run_gcode('SET_PIN PIN=th_fan VALUE=0', 3) is None:
+            self.append_log(f'风扇关闭失败')
+            return
+        self.select_run_gcode('SET_PIN PIN=qcs_fan VALUE=0', 3)
+        self.select_run_gcode('SET_PIN PIN=shield_fan VALUE=0', 3)
+        self.select_run_gcode('SET_PIN PIN=shield_fan_pwm VALUE=0', 3)
+        self.append_log(f'风扇已关闭\n')
 
     def led_test(self):
         for i in range(2):
-            msg_list = self.select_run_gcode('SET_PIN PIN=shield_led VALUE=1', 1)
-            msg_list = self.select_run_gcode('SET_PIN PIN=logo_led VALUE=1', 1)
-            time.sleep(0.3)
-            msg_list = self.select_run_gcode('SET_PIN PIN=shield_led VALUE=0', 1)
-            msg_list = self.select_run_gcode('SET_PIN PIN=logo_led VALUE=0', 1)
-            time.sleep(0.3)
-        msg_list = self.select_run_gcode('SET_PIN PIN=shield_led VALUE=1', 1)
-        msg_list = self.select_run_gcode('SET_PIN PIN=logo_led VALUE=1', 1)
+            if self.select_run_gcode('SET_PIN PIN=shield_led VALUE=1', 3) is None:
+                self.append_log(f'灯条测试失败\n')
+                return
+            msg_list = self.select_run_gcode('SET_PIN PIN=logo_led VALUE=1', 3)
+            time.sleep(0.1)
+            msg_list = self.select_run_gcode('SET_PIN PIN=shield_led VALUE=0', 3)
+            msg_list = self.select_run_gcode('SET_PIN PIN=logo_led VALUE=0', 3)
+            time.sleep(0.1)
+        msg_list = self.select_run_gcode('SET_PIN PIN=shield_led VALUE=1', 3)
+        msg_list = self.select_run_gcode('SET_PIN PIN=logo_led VALUE=1', 3)
         self.append_log(f'灯条测试结束\n')
 
     def th_cam_test(self):
@@ -411,13 +445,13 @@ class DeviceTestApp:
             self.root.after(0, lambda: self.image_lab.config(image=self.img_tk))
     
     def pump_calibrate(self):
-        msg_list = self.select_run_gcode('PUMP_PRESSURE_CALIBRATE', 2)
+        msg_list = self.select_run_gcode('PUMP_PRESSURE_CALIBRATE', 3)
         self.append_log(f'{msg_list[0]}')
         self.append_log(f'气压传感器校准完成\n')
 
     def pump_test(self):
         try:
-            msg_list = self.select_run_gcode('PUMP_PRESSURE_QUERY', 2)
+            msg_list = self.select_run_gcode('PUMP_PRESSURE_QUERY', 3)
             data_line = msg_list[0].strip().split('\n')
             data = []
             for l in data_line:
@@ -451,7 +485,7 @@ class DeviceTestApp:
             wait_completion = WaitCompletion()
             thread = Thread(
                 target=self.run_gcode_thread,
-                args=(sel_device, wait_completion, gcode, timeout),
+                args=(sel_device, wait_completion, gcode),
                 daemon=True
                 )
             thread.start()
@@ -461,11 +495,11 @@ class DeviceTestApp:
             res = None
         return res
     
-    def run_gcode_thread(self, sel_device, wait_comp, gcode: str, timeout=3):
+    def run_gcode_thread(self, sel_device, wait_comp, gcode: str):
         try:
             gcode_event_loop = asyncio.new_event_loop()
             asyncio.set_event_loop(gcode_event_loop)
-            res = gcode_event_loop.run_until_complete(sel_device.get('client').run_gcode(gcode, timeout))
+            res = gcode_event_loop.run_until_complete(sel_device.get('client').run_gcode(gcode))
             wait_comp.complete(res)
         except Exception as e:
             print(f"{e}")
@@ -500,20 +534,17 @@ class DeviceTestApp:
 
     # ========== 选择CSV文件 ==========
     def select_csv_file(self):
+        
         file_path = filedialog.askopenfilename(
             title="选择测试项CSV文件",
             filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")]
         )
         if not file_path:
             return
-
         if self.csv_reader.read_csv(file_path):
             self.test_template = self.csv_reader.get_all_items()
             self.update_test_list()  # 修复：移除多余参数
             messagebox.showinfo("成功", f"加载测试项成功！\n共 {len(self.test_template)} 项")
-            # 加载CSV后更新所有设备的测试列表
-            for ip in self.devices:
-                self.refresh_device_test_items(ip)
         else:
             messagebox.showerror("失败", "CSV文件加载失败")
 
@@ -671,7 +702,7 @@ class DeviceTestApp:
         print(checked_ips)
         thread = threading.Thread(target=self.run_async_loop,args=(checked_ips,), daemon=True)
         thread.start()
-        self.set_buttons_state([self.btn_add_device, self.btn_remove_devices, self.btn_start, self.btn_select_csv], 'disabled')
+        self.set_buttons_state([self.btn_add_ip_to_list ,self.btn_remove_devices, self.btn_start, self.btn_select_csv], 'disabled')
     
     def befor_test(self, ip, index):
         dev = self.devices.get(ip)
@@ -701,7 +732,7 @@ class DeviceTestApp:
             ''''''
             print("run_async_loop 错误 =>", e)
         finally:
-            self.set_buttons_state([self.btn_add_device, self.btn_remove_devices, self.btn_start, self.btn_select_csv], 'normal')
+            self.set_buttons_state([self.btn_add_ip_to_list, self.btn_remove_devices, self.btn_start, self.btn_select_csv], 'normal')
             loop.close()
 
     # ------------------------------
@@ -726,10 +757,11 @@ class DeviceTestApp:
     def add_device_by_ip(self, ip):
         if not ip:
             messagebox.showwarning("提示", "IP地址不能为空！")
-            return
+            return False
+        # print(self.devices.keys())
         if ip in self.devices:
             messagebox.showinfo("提示", f"{ip} 已添加，无需重复！")
-            return
+            return False
 
         var = tk.BooleanVar(value=False)
         tab = ttk.Frame(self.tab_control)
@@ -767,9 +799,9 @@ class DeviceTestApp:
         hs.grid(row=1, column=0, sticky="ew")
 
         # 若已有CSV模板，初始化表格；否则留空
-        if self.test_template:
-            for item in self.test_template:
-                tree.insert("", "end", values=(item.get("name", ""), item.get("standard", ""), "", ""))
+        # if self.test_template:
+        #     for item in self.test_template:
+        #         tree.insert("", "end", values=(item.get("测试项", ""), item.get("标准", ""), "", ""))
 
         # 保存设备信息
         self.devices[ip] = {
@@ -780,12 +812,7 @@ class DeviceTestApp:
             "test_time": None,
             'test_result': []
         }
-
-    def add_device(self):
-        ip = self.ip_entry.get().strip()
-        self.add_device_by_ip(ip)
-        # 刷新设备列表显示
-        self.root.after(0, self.refresh_device_list, self.list_inner, self.list_canvas)
+        return True
 
     def delete_checked_devices(self):
         to_del = [ip for ip, info in self.devices.items() if info["var"].get()]

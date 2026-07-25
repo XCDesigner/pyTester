@@ -3,7 +3,7 @@ import serial.tools.list_ports
 import threading
 from threading import Lock
 import time, re
-from typing import Optional, List, Callable
+from typing import Optional, List, Callable, Dict, Any
 
 class SerialPort:
     def __init__(self):
@@ -50,7 +50,7 @@ class SerialPort:
     # 关闭串口
     def close_port(self):
         self.is_running = False
-        if self.recv_thread and self.recv_thread.is_alive():
+        if self.recv_thread and self.recv_thread.is_alive() and threading.current_thread() != self.recv_thread:
             self.recv_thread.join(timeout=1)
         if self.ser and self.ser.is_open:
             self.ser.close()
@@ -86,6 +86,8 @@ class SerialPort:
             return
         line, self.recv_buff = self.recv_buff.split('\n', 1)
         if self.wait_complete is not None:
+            print(line)
+            print(self.string_to_wait)
             if self.string_to_wait in line:
                 self.wait_complete.complete(line)
 
@@ -139,6 +141,7 @@ class SerialTester(SerialPort):
             'WIFI_INFO': self.wifi_info,
             'BEEPER_START': self.beeper_start,
             'PD_TEST': self.pd_test,
+            '$I': self.query_version,
         }
     
     def run_command(self, command:str, **kwargs):
@@ -149,16 +152,28 @@ class SerialTester(SerialPort):
         except Exception as e:
             print(f'Run command fail: {e}')
 
-    def wifi_connect(self, ssid:str, password:str):
-        self.send_str(f'WIFI_CONNECT SSID={ssid}, password={password}\n')
+    def wifi_connect(self, kwargs: Dict[str, Any]):
+        ssid = kwargs.get('ssid', None)
+        password = kwargs.get('password', None)
+        if ssid is None or password is None:
+            return
+        self.send_str(f'WIFI_CONNECT SSID={ssid} PASSWORD={password}\n')
+        res = self.wait_reack(f'set Wi-Fi success')
+        return res is not None
 
     def wifi_info(self, param):
         self.send_str(f'WIFI_INFO\n')
         res = self.wait_reack(f'SSID')
         if res is not None:
             res = self.to_dict(res)
-            print(res.get('IP'))
             return res.get('IP')
+        return ''
+    
+    def query_version(self, param):
+        self.send_str(f'$I\n')
+        res = self.wait_reack(f'version')
+        if res is not None:
+            return res
         return ''
     
     def beeper_start(self, param):

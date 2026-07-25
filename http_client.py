@@ -7,6 +7,7 @@ from result_analizer import TemplateParser
 from websockets.exceptions import ConnectionClosed
 import aiohttp
 import cv2
+from datetime import datetime
 import numpy as np
 
 class HttpClient:
@@ -42,6 +43,7 @@ class HttpClient:
         self.wait_result = None
         self.error_handler = None
         self.ws_connected = False
+        self.start_up_detected = False
 
     async def _get_http_session(self) -> aiohttp.ClientSession:
         """懒创建全局http会话"""
@@ -147,14 +149,18 @@ class HttpClient:
             new_msg = data.get('params')[0]
             print(f"[{self.ip}] WS收到数据: {new_msg}")
             self.ws_msg_list.append(new_msg)
+            if 'Shutdown' in new_msg:
+                self.wait_result = 'Shutdown'
             if self.msg_in_waiting:
-                for msg in self.ws_msg_list[-5:]:
+                for msg in self.ws_msg_list[-30:]:
                     if self.msg_in_waiting in msg:
                         self.wait_result = msg
+        elif data.get('method') == 'push.initialized':
+            self.start_up_detected = True
 
     async def wait_ws_message(self, msg_to_wait:str, timeout):
         self.msg_in_waiting = msg_to_wait
-        self.wait_result = None 
+        self.wait_result = None
         start_time = asyncio.get_event_loop().time()
         while True:
             if self.wait_result:
@@ -179,11 +185,12 @@ class HttpClient:
     async def get_cv_image(self, camera_name):
         url = f"http://{self.ip}/api/module/camera/snapshot?name={camera_name}"
         print(url)
-        timeout = aiohttp.ClientTimeout(total=10)
+        timeout = aiohttp.ClientTimeout(total=30)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             try:
                 async with session.get(url) as resp:
                     if resp.status != 200:
+                        print(f"拍照 {resp.status}")
                         return None
                     img_bytes = await resp.read()
                     from io import BytesIO
@@ -194,7 +201,6 @@ class HttpClient:
                 return None
 
     async def send_gcode_safe(self, gcode: str, timeout: int = 30):
-        """纯异步HTTP，不阻塞事件循环，替代原requests"""
         headers = {"Content-Type": "application/json"}
         payload = {"script": gcode}
         url = f"http://{self.ip}/api/laser/gcode/script"
@@ -208,10 +214,10 @@ class HttpClient:
                 status = "成功" if res.status == 200 else f"失败({res.status})"
                 log = f"[{self.ip}] JSON发送指令 → {status}"
                 print(log)
-                return True
+                return True, 200
         except Exception as e:
             print(f"[{self.ip}] 发送失败：{str(e)}")
-            return False
+            return False, 504
 
     def parse_result(self, logs: List[str], template: str):
         paser = TemplateParser(template)
@@ -222,17 +228,20 @@ class HttpClient:
         return {}
     
     async def sys_mode(self, index, gcode:str, test_item):
+        self.start_up_detected = False
         await self.send_gcode_safe(gcode, 300)
-        # await asyncio.sleep(8)
-        # retry = 20
-        # result = False
-        # while retry :
-        #     if await self.send_gcode_safe('G90', 2) == True:
-        #         result = True
-        #         break
-        #     retry = retry - 1
-        result = await self.wait_ws_message('Machine is ready for operation.', 30)
-        await asyncio.sleep(1)
+        # result = await self.wait_ws_message('Machine is ready for operation.', 30)
+        await asyncio.sleep(0.2)
+        start = datetime.now()
+        while True:
+            if (datetime.now() - start).total_seconds() > 50:
+                result = False
+                break
+            if self.start_up_detected == True:
+                result = True
+                break
+            await asyncio.sleep(0.1)
+        await asyncio.sleep(5)
         return [index, result, 'ok']
 
     async def wifi_info(self, index, gcode:str, test_item):
@@ -262,8 +271,9 @@ class HttpClient:
 
     async def test_encoder(self, index, gcode:str, test_item):
         ''''''
-        await self.send_gcode_safe(gcode, 5*60)
-        await asyncio.sleep(0.2)
+        await self.send_gcode_safe(gcode, 1*60)
+        await self.wait_ws_message('FINAL MECHANICS TEST REPORT', 7*60)
+        await asyncio.sleep(1)
         result_x = self.parse_result(self.ws_msg_list, 'X axis: max diff = {max_diff_x}').get('max_diff_x', 100)
         result_y = self.parse_result(self.ws_msg_list, 'Y axis: max diff = {max_diff_y}').get('max_diff_y', 100)
         try:
@@ -285,14 +295,19 @@ class HttpClient:
 
     async def auto_home_turn(self, index, gcode:str, test_item):
         ''''''
-        await self.send_gcode_safe(gcode, 10*60)
-        await asyncio.sleep(0.2)
-        return [index, True, 'ok']
+        await self.send_gcode_safe(gcode, 10)
+        if await self.wait_ws_message('Auto-homing tuning complete', 15*60) is not None:
+            res = True
+        else:
+            res = False
+        await asyncio.sleep(1)
+        return [index, res, 'ok']
 
     async def test_home(self, index, gcode:str, test_item):
         ''''''
-        await self.send_gcode_safe(gcode, 10*60)
-        await asyncio.sleep(0.2)
+        await self.send_gcode_safe(gcode, 600)
+        await self.wait_ws_message('HOME POSITION REPEATABILITY TEST REPORT', 10*60)
+        await asyncio.sleep(1.5)
         result_x = self.parse_result(self.ws_msg_list, 'X: Range={x_range} mm, Min={x_min}, Max={x_max}').get('x_range', 100)
         result_y = self.parse_result(self.ws_msg_list, 'Y: Range={y_range} mm, Min={y_min}, Max={y_max}').get('y_range', 100)
         try:
@@ -410,10 +425,14 @@ class HttpClient:
 
     async def temp_test(self, index, gcode:str, test_item):
         ''''''
+        if 'P=60' in gcode:
+            power=60
+        else:
+            power=90
+
         await self.send_gcode_safe('BLUE_TEMP_GET', 5 * 60)
         await asyncio.sleep(0.2)
         temp_line = self.ws_msg_list[0]
-        fault = True
         data = list({k: float(v) for k, v in (p.split(":") for p in temp_line.split(","))}.values())
         temp = []
         temp.extend(data)
@@ -423,37 +442,48 @@ class HttpClient:
         data = list({k: float(v) for k, v in (p.split(":") for p in temp_line.split(","))}.values())
         temp.extend(data)
         print(temp)
-        str_temp = f'T0:{temp[1]:0.1f} T1:{temp[2]:0.1f} T2:{temp[3]:0.1f} QCS:{temp[4]:0.1f} 隔离器:{temp[5]:0.1f} 振镜外壳:{temp[6]:0.1f}'
         
-        for t in temp:
-            if t<5 or t>35:
+        if power == 90:
+            test_temp = temp
+            str_temp = f'T0:{temp[1]:0.1f} T1:{temp[2]:0.1f} T2:{temp[3]:0.1f} QCS:{temp[4]:0.1f} 隔离器:{temp[5]:0.1f} 振镜外壳:{temp[6]:0.1f}'
+        elif power == 60:
+            test_temp = temp[1:3] + temp[4:7]
+            str_temp = f'T0:{temp[1]:0.1f} T1:{temp[2]:0.1f} QCS:{temp[4]:0.1f} 隔离器:{temp[5]:0.1f} 振镜外壳:{temp[6]:0.1f}'
+        result = True
+        print(test_temp)
+        for t in test_temp:
+            if t<5 or t>42:
                 result = False
                 break
         return [index, result, str_temp]
 
     async def camera_test(self, index, gcode:str, test_item):
         result = True
+        msg_log = ''
         res_th = await self.get_cv_image('th')
         if res_th is None:
             result = False
+            msg_log += '近端摄像头抓拍失败，'
             print(f'近端摄像头，抓拍失败\n')
         else:
-            result = True
+            msg_log += '近端摄像头抓拍成功，'
             print(f'近端摄像头，抓拍成功\n')
+        await asyncio.sleep(5)
         res_global = await self.get_cv_image('global')
         if res_global is None:
             result = False
+            msg_log += '，远端摄像头抓拍失败'
             print(f'远端摄像头，抓拍失败\n')
         else:
-            result = True
+            msg_log += '，远端摄像头抓拍成功'
             print(f'远端摄像头，抓拍成功\n')
-        return [index, result, '', [res_th, res_global]]
+        return [index, result, msg_log, [res_th, res_global]]
     
     async def ukey_test(self, index, gcode: str, test_item):
         await self.send_gcode_safe('QUERY_ACCESS_KEY', 5 * 60)
         await asyncio.sleep(0.2)
         temp_line = self.ws_msg_list[0]
-        if temp_line == 'Access key: detected':
+        if 'Access key: detected' in temp_line:
             return [index, True, temp_line]
         else:
             return [index, False, temp_line]
@@ -464,7 +494,7 @@ class HttpClient:
         print(f'{self.ip}: test complete')
         return [index, True, 'ok']
     
-    async def run_gcode(self, gcode: str, timeout=3):
+    async def run_gcode(self, gcode: str):
         ''''''
         if not self.ws_connected:
             await self.ws_connect()
