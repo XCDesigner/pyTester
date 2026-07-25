@@ -335,8 +335,9 @@ class HttpClient:
 
     async def tst_xy_range(self, index, gcode:str, test_item):
         ''''''
-        await self.send_gcode_safe(gcode, 10*60)
-        await asyncio.sleep(0.2)
+        await self.send_gcode_safe(gcode, 30)
+        await self.wait_ws_message('XY RANGE TEST SUMMARY', 12*60)
+        await asyncio.sleep(1)
         max_y0 = self.parse_result(self.ws_msg_list, 'Side 1/4 - {RESULT} - Expected: {expected} mm, Detected: {Detected} mm').get('Detected', 100)
         max_x0 = self.parse_result(self.ws_msg_list, 'Side 2/4 - {RESULT} - Expected: {expected} mm, Detected: {Detected} mm').get('Detected', 100)
         max_y1 = self.parse_result(self.ws_msg_list, 'Side 3/4 - {RESULT} - Expected: {expected} mm, Detected: {Detected} mm').get('Detected', 100)
