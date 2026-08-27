@@ -5,3 +5,4 @@ websockets
 scp
 aiohttp
 ttkthemes
+pyinstaller

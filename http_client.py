@@ -296,7 +296,7 @@ class HttpClient:
     async def auto_home_turn(self, index, gcode:str, test_item):
         ''''''
         await self.send_gcode_safe(gcode, 10)
-        if await self.wait_ws_message('Auto-homing tuning complete', 15*60) is not None:
+        if await self.wait_ws_message('Auto-homing tuning complete', 20*60) is not None:
             res = True
         else:
             res = False
@@ -396,9 +396,13 @@ class HttpClient:
 
     async def test_xy_speed_hybrid(self, index, gcode:str, test_item):
         ''''''
-        await self.send_gcode_safe(gcode, 30*60)
-        print('hybrid 测试结束')
+        await self.send_gcode_safe('DOOR_SET LEVEL=disbale')
         await asyncio.sleep(0.5)
+        await self.send_gcode_safe(gcode, 10)
+        await self.wait_ws_message('HYBRID SPEED TEST SUMMARY', 20*10)
+        await asyncio.sleep(0.5)
+        await self.send_gcode_safe('DOOR_SET LEVEL=job')
+        print('hybrid 测试结束')
         # test_result = self.ws_msg_list[-10:-1]
         # test_result.reverse()
         # try:
