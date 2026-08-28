@@ -17,7 +17,6 @@ class HttpClient:
         self.test_handle = {
             'SYS_MODE': self.sys_mode,
             'WIFI_INFO': self.wifi_info,
-            'G28': self.G28_test,
             'TEST_ENCODER': self.test_encoder,
             # 'ENCODER_GET_COUNTER': self.encoder_get_count,
             'AUTO_HOME_TUNE': self.auto_home_turn,
@@ -258,17 +257,6 @@ class HttpClient:
         await asyncio.sleep(0.2)
         return [index, True, self.mac]
 
-    async def G28_test(self, index, gcode:str, test_item):
-        print(f'{self.ip}: test g28')
-        await asyncio.sleep(0.2)
-        print(f'{self.ip}: test complete')
-        if self.ip == '172.16.22.126':
-            return [index, True, 'ok']
-        else:
-            return [index, False, 'ok']
-        # self.send_gcode(gcode)
-
-
     async def test_encoder(self, index, gcode:str, test_item):
         ''''''
         await self.send_gcode_safe(gcode, 1*60)
@@ -396,10 +384,10 @@ class HttpClient:
 
     async def test_xy_speed_hybrid(self, index, gcode:str, test_item):
         ''''''
-        await self.send_gcode_safe('DOOR_SET LEVEL=disbale')
+        await self.send_gcode_safe('DOOR_SET LEVEL=disable')
         await asyncio.sleep(0.5)
         await self.send_gcode_safe(gcode, 10)
-        await self.wait_ws_message('HYBRID SPEED TEST SUMMARY', 20*10)
+        await self.wait_ws_message('HYBRID SPEED TEST SUMMARY', 20*60)
         await asyncio.sleep(0.5)
         await self.send_gcode_safe('DOOR_SET LEVEL=job')
         print('hybrid 测试结束')
@@ -427,6 +415,7 @@ class HttpClient:
     
     async def pd_test(self, index, gcode:str, test_item):
         ''''''
+        return [index, "Manual", "ok"]
 
     async def temp_test(self, index, gcode:str, test_item):
         ''''''
@@ -499,12 +488,12 @@ class HttpClient:
         print(f'{self.ip}: test complete')
         return [index, True, 'ok']
     
-    async def run_gcode(self, gcode: str):
+    async def run_gcode(self, gcode: str, timeout=30):
         ''''''
         if not self.ws_connected:
             await self.ws_connect()
         self.clear_ws_messages()
-        await self.send_gcode_safe(gcode)
+        await self.send_gcode_safe(gcode, timeout)
         await asyncio.sleep(0.5)
         res_msg = self.ws_msg_list
         await self.ws_disconnect()
@@ -514,27 +503,61 @@ class HttpClient:
 
     async def test(self, test_items:Dict[str, Dict[str, str]], callback, error_callback, start_callback):
         self.error_handler = error_callback
-        for i, test in enumerate(test_items.values()):
-            await asyncio.sleep(0.3)
-            if not self.ws_connected:
-                await self.ws_connect()
-            self.clear_ws_messages()
-            gcode = test.get('gcode')
-            if not gcode:
-                func = self.dummy_test
-            else:
-                gcode_cmd = gcode.split(' ')[0]
-                print(f'测试项:{i}: {gcode_cmd}')
-                if gcode_cmd in self.test_handle:
-                    func = self.test_handle.get(gcode_cmd)
+        self.test_inprogress = True
+        try:
+            for i, test in enumerate(test_items.values()):
+                await asyncio.sleep(0.3)
+                # 检查websocket连接，断开就重连；重连失败直接终止整套测试
+                if not self.ws_connected:
+                    conn_ok = await self.ws_connect()
+                    if not conn_ok:
+                        err_msg = f"[{self.ip}] WebSocket重连失败，终止测试"
+                        print(err_msg)
+                        if error_callback is not None:
+                            error_callback(self.ip, err_msg)
+                        return False, self.mac, self.ip
+
+                self.clear_ws_messages()
+                gcode = test.get('gcode')
+                if not gcode:
+                    func = self.dummy_test
                 else:
-                    print(f'测试项不支持{i}: {gcode_cmd}')
-                    continue
-            start_callback(self.ip, i)
-            result = await func(i, gcode, test)
-            if callback(self.ip, result) == False:
-                await self.ws_disconnect()
-                return False, self.mac, self.ip
-        await self.ws_disconnect()
-        await self._http_session.close()
-        return True, self.mac, self.ip
+                    gcode_cmd = gcode.split(' ')[0]
+                    print(f'测试项:{i}: {gcode_cmd}')
+                    if gcode_cmd in self.test_handle:
+                        func = self.test_handle.get(gcode_cmd)
+                    else:
+                        print(f'测试项不支持:{i}: {gcode_cmd}')
+                        skip_result = [i, "Skip", f"不支持命令:{gcode_cmd}"]
+                        callback(self.ip, skip_result)
+                        continue
+
+                start_callback(self.ip, i)
+                try:
+                    result = await func(i, gcode, test)
+                except Exception as e:
+                    # 单个测试项异常，封装异常结果，不终止整套流程
+                    err_text = f"执行异常: {type(e).__name__}:{str(e)}"
+                    print(f"[{self.ip}] test item {i} exception: {err_text}")
+                    result = [i, False, err_text]
+
+                # callback返回False代表上层要求中止测试
+                if callback(self.ip, result) is False:
+                    await self.ws_disconnect()
+                    return False, self.mac, self.ip
+
+            # 全部case跑完，关闭websocket；http_session不在此处close
+            await self.ws_disconnect()
+            return True, self.mac, self.ip
+
+        except Exception as global_e:
+            # 顶层意外异常
+            err_msg = f"[{self.ip}] 整套测试发生全局异常:{global_e}"
+            print(err_msg)
+            if error_callback is not None:
+                error_callback(self.ip, err_msg)
+            return False, self.mac, self.ip
+
+        finally:
+            # ✅无论正常返回、异常、return，都必须把测试进行标记复位
+            self.test_inprogress = False

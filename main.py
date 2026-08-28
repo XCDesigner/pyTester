@@ -188,7 +188,78 @@ class DeviceTestApp:
         self.btn_reset_sensors_setting:Button = ttk.Button(sensor_container, text="恢复传感器设置", command=self.reset_sensor_settings)
         self.btn_reset_sensors_setting.grid(row=9, column=0, sticky="ew", padx=10, pady=4)
 
-        # =========== Tab2：性能测试：中间区域+右侧区域做水平分栏 ===========
+                # =========== Tab2：运动性能单项测试 ===========
+        tab_motion = ttk.Frame(main_tab)
+        main_tab.add(tab_motion, text="运动性能单项测试")
+        # 水平分割窗：左边按钮区，右边运动日志区
+        motion_pane = ttk.PanedWindow(tab_motion, orient=tk.HORIZONTAL)
+        motion_pane.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        # ---------------- 左侧：按钮区域 ----------------
+        motion_left_frame = ttk.Frame(motion_pane)
+        motion_pane.add(motion_left_frame, weight=1)
+        motion_left_frame.grid_columnconfigure(0, weight=1)
+        motion_left_frame.grid_rowconfigure(1, weight=1)
+
+        # 顶部IP选择区域，与Tab1 com_ips双向同步
+        motion_top_frame = ttk.LabelFrame(motion_left_frame, text="设备选择")
+        motion_top_frame.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
+        motion_top_frame.grid_columnconfigure(1, weight=3)
+
+        ttk.Label(motion_top_frame, text="目标设备IP:").grid(row=0, column=0, sticky="w", padx=5, pady=4)
+        self.motion_com_ips = ttk.Combobox(motion_top_frame, state="readonly")
+        self.motion_com_ips.grid(row=0, column=1, sticky="ew", padx=5, pady=4)
+
+        # 绑定选中变化回调，双向同步两个combo
+        self.com_ips.bind("<<ComboboxSelected>>", self._on_tab1_ip_changed)
+        self.motion_com_ips.bind("<<ComboboxSelected>>", self._on_tab2_ip_changed)
+
+        # 运动测试按钮区域
+        motion_btn_frame = ttk.LabelFrame(motion_left_frame, text="运动测试")
+        motion_btn_frame.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
+
+        # 布局按钮，可后续按需增删GCode
+        btn_list = [
+            ("回home标定", "AUTO_HOME_TURN"),
+            ("回home测试", "TEST_HOME"),
+            ("传感器精度测试", "TEST_ENCODER"),
+            ("XY行程测试", "TEST_XY_RANGE"),
+            ("X轴加速度测试", "TEST_XY_SPEED AXIS=X SPEED=700,800,100 ACCEL=4000,4000,0"),
+            ("Y轴加速度测试", "TEST_XY_SPEED AXIS=Y SPEED=500,600,100 ACCEL=4000,4000,0"),
+            ("XY轴加速度混动测试", "TEST_XY_SPEED_HYBRID SPEED=400,500,100 ACCEL=4000,4000,0"),
+        ]
+        for idx, (btn_text, gcode_cmd) in enumerate(btn_list):
+            row = idx // 4
+            col = idx % 4
+            ttk.Button(
+                motion_btn_frame,
+                text=btn_text,
+                command=lambda cmd=gcode_cmd: self._motion_test_run(cmd)
+            ).grid(row=row, column=col, sticky="ew", padx=6, pady=6)
+        # 让列均匀拉伸
+        for c in range(4):
+            motion_btn_frame.grid_columnconfigure(c, weight=1)
+
+        # ---------------- 右侧：运动测试专属日志框 ----------------
+        motion_right_frame = ttk.Frame(motion_pane)
+        motion_pane.add(motion_right_frame, weight=1)
+        motion_right_frame.grid_columnconfigure(0, weight=1)
+        motion_right_frame.grid_rowconfigure(0, weight=1)
+
+        motion_log_frame = ttk.LabelFrame(motion_right_frame, text="运动测试日志")
+        motion_log_frame.grid(row=0, column=0, sticky="nsew", padx=2, pady=2)
+        motion_log_frame.grid_columnconfigure(0, weight=1)
+        motion_log_frame.grid_rowconfigure(0, weight=1)
+
+        motion_log_scroll = ttk.Scrollbar(motion_log_frame)
+        motion_log_scroll.grid(row=0, column=1, sticky="ns")
+
+        self.motion_log_text = tk.Text(motion_log_frame, yscrollcommand=motion_log_scroll.set, font=("Consolas",9))
+        motion_log_scroll.config(command=self.motion_log_text.yview)
+        self.motion_log_text.grid(row=0, column=0, sticky="nsew")
+        self.motion_log_text.config(state=tk.DISABLED)
+
+        # =========== Tab3：性能测试：中间区域+右侧区域做水平分栏 ===========
         tab_perf = ttk.Frame(main_tab)
         main_tab.add(tab_perf, text="性能测试")
         perf_pane = ttk.PanedWindow(tab_perf, orient=tk.HORIZONTAL)
@@ -240,6 +311,16 @@ class DeviceTestApp:
             self.log_text.insert(tk.END, f"[{time_str}] {content}")
             self.log_text.see(tk.END)  # 自动滚动到底部
             self.log_text.config(state=tk.DISABLED)
+        self.root.after(0, _inner)
+
+    def append_motion_log(self, content):
+        """Tab2运动测试专用日志，线程安全，带时间戳"""
+        def _inner():
+            self.motion_log_text.config(state=tk.NORMAL)
+            time_str = datetime.now().strftime("%H:%M:%S")
+            self.motion_log_text.insert(tk.END, f"[{time_str}] {content}")
+            self.motion_log_text.see(tk.END)
+            self.motion_log_text.config(state=tk.DISABLED)
         self.root.after(0, _inner)
 
     def refresh_port(self):
@@ -485,7 +566,7 @@ class DeviceTestApp:
             wait_completion = WaitCompletion()
             thread = Thread(
                 target=self.run_gcode_thread,
-                args=(sel_device, wait_completion, gcode),
+                args=(sel_device, wait_completion, gcode, timeout),
                 daemon=True
                 )
             thread.start()
@@ -495,11 +576,11 @@ class DeviceTestApp:
             res = None
         return res
     
-    def run_gcode_thread(self, sel_device, wait_comp, gcode: str):
+    def run_gcode_thread(self, sel_device, wait_comp, gcode: str, timeout=30):
         try:
             gcode_event_loop = asyncio.new_event_loop()
             asyncio.set_event_loop(gcode_event_loop)
-            res = gcode_event_loop.run_until_complete(sel_device.get('client').run_gcode(gcode))
+            res = gcode_event_loop.run_until_complete(sel_device.get('client').run_gcode(gcode, timeout))
             wait_comp.complete(res)
         except Exception as e:
             print(f"{e}")
@@ -698,19 +779,26 @@ class DeviceTestApp:
         if not checked_ips:
             messagebox.showwarning("提示", "请先勾选要测试的设备！")
             return
-        self.reset_test_result(checked_ips)
-        print(checked_ips)
-        thread = threading.Thread(target=self.run_async_loop,args=(checked_ips,), daemon=True)
+        busy_ips = [ip for ip in checked_ips if self.devices[ip]["is_testing"]]
+        run_ips = [ip for ip in checked_ips if not self.devices[ip]["is_testing"]]
+
+        if not run_ips:
+            return
+
+        self.reset_test_result(run_ips)
+        print(run_ips)
+        for ip in run_ips:
+            self.devices[ip]["is_testing"] = True
+        thread = threading.Thread(target=self.run_async_loop,args=(run_ips,), daemon=True)
         thread.start()
-        self.set_buttons_state([self.btn_add_ip_to_list ,self.btn_remove_devices, self.btn_start, self.btn_select_csv], 'disabled')
-    
+
     def befor_test(self, ip, index):
         dev = self.devices.get(ip)
         if not dev:
             return
         tree = dev['tree']
         self.root.after(0, self._update_tree_color, tree, index, "#778487")
-    
+
     def run_async_loop(self, ip_list):
         # 在线程中设置并运行新的事件循环
         loop = asyncio.new_event_loop()
@@ -732,8 +820,42 @@ class DeviceTestApp:
             ''''''
             print("run_async_loop 错误 =>", e)
         finally:
-            self.set_buttons_state([self.btn_add_ip_to_list, self.btn_remove_devices, self.btn_start, self.btn_select_csv], 'normal')
+            for ip in ip_list:
+                if ip in self.devices:
+                    self.devices[ip]["is_testing"] = False
             loop.close()
+
+    def _on_tab1_ip_changed(self, event):
+        """Tab1 IP下拉变化，同步更新Tab2下拉"""
+        ip = self.com_ips.get()
+        if ip:
+            self.motion_com_ips.set(ip)
+
+    def _on_tab2_ip_changed(self, event):
+        """Tab2 IP下拉变化，同步更新Tab1下拉"""
+        ip = self.motion_com_ips.get()
+        if ip:
+            self.com_ips.set(ip)
+
+    def _motion_test_run(self, gcode: str):
+        """Tab2运动测试按钮执行入口：放到后台线程，不阻塞tk主线程"""
+        sel_ip = self.motion_com_ips.get().strip()
+        if not sel_ip:
+            messagebox.showwarning("提示", "请先选择目标设备IP")
+            self.append_motion_log(f"[警告] 未选择设备IP\n")
+            return
+
+        def motion_background_task():
+            self.append_motion_log(f"[{sel_ip}] 执行GCode: {gcode}\n")
+            ret = self.select_run_gcode(gcode, timeout=10*60)
+            if ret is None:
+                self.append_motion_log(f"[{sel_ip}] {gcode} 执行失败\n\n")
+            else:
+                self.append_motion_log(f"[{sel_ip}] {gcode} 执行完成，返回:{ret}\n\n")
+
+        # daemon后台线程，不阻塞GUI
+        t = threading.Thread(target=motion_background_task, daemon=True)
+        t.start()
 
     # ------------------------------
     # 修复：设备列表刷新（渲染到带滚动的容器）
@@ -750,6 +872,9 @@ class DeviceTestApp:
                 variable=self.devices[ip]["var"]
             ).grid(row=idx, column=0, sticky="w", padx=2, pady=1)
         self.com_ips['values'] = list(self.devices.keys())
+        self.motion_com_ips['values'] = list(self.devices.keys()) #新增
+        if self.devices:                                           #新增
+            self.motion_com_ips.current(0)
         self.com_ips.current(0)
         # # 强制更新滚动区域
         list_canvas.configure(scrollregion=self.list_canvas.bbox("all"))
@@ -810,7 +935,8 @@ class DeviceTestApp:
             "tree": tree,
             "client": HttpClient(ip),
             "test_time": None,
-            'test_result': []
+            'test_result': [],
+            'is_testing': False
         }
         return True
 
